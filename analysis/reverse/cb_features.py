@@ -76,17 +76,24 @@ CATS = [
     "age_range",
     "grades",
     "month",
+    "code",
     "src_reg",
     "src_age",
     "reg_age",
     "src_cq",
     "days_q",
     "cond_q",
+    "ratio_q",
+    "rate_q",
     "src_dq",
     "reg_cq",
     "reg_dq",
     "days_q5",
     "src_dq5",
+    "src_ratioq",
+    "src_rateq",
+    "cq_dq",
+    "src_grades",
 ]
 
 HIGH_TE_KEYS = ["src_cq_dq", "cq_dq", "src_ratioq"]
@@ -201,6 +208,9 @@ def fold_features(trn: pd.DataFrame, val: pd.DataFrame) -> tuple[pd.DataFrame, p
         df["reg_dq"] = df["region"] + "|" + df["days_q"]
         df["cq_dq"] = df["cond_q"] + "|" + df["days_q"]
         df["src_ratioq"] = df["source"] + "|" + df["ratio_q"]
+        df["src_rateq"] = df["source"] + "|" + df["rate_q"].astype(str)
+        df["src_grades"] = df["source"] + "|" + df["grades"]
+        df["code"] = df["code"].astype(str)
         df["src_cq_dq"] = df["source"] + "|" + df["cond_q"] + "|" + df["days_q"]
     return trn, val
 

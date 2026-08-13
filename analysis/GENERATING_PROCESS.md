@@ -3,7 +3,7 @@
 更新：2026-08-13。全部数字为 **StratifiedKFold、折内 fit** 的诚实 OOF AUC。正例率 0.1002。  
 禁止口径：全量 TE、test 伪标签、id 特征。历史泄漏 0.73 不作真实水平。
 
-当前最佳诚实 OOF（见文末配方）会随多种子 CatBoost 更新；中间融合已到 **0.6936**。
+当前最佳诚实 OOF（见文末配方）**0.69681**（8-seed val-ES max2 ⊕ LGB），距 0.70 还差 ~0.003。泄漏全量 TE 的 0.73 不作真实水平。
 
 ---
 
@@ -244,12 +244,28 @@ Spark 可实现：数值、分箱、折内 TE 分数、GBT。高基数 `source|c
 
 文件：`/workspace/analysis/reverse/best_oof.npy`
 
-**截至多种子 gen-CatBoost 完成前：**
+**Inner-ES（训练折内 12% 早停，编码器只在训练折 fit）——更保守的诚实口径**
 
-- CatBoost teacher：10-fold × 3-bag × 1-seed，RMSE，中基数类别（无 src_cq_dq 原生列），inner-ES  
-  max2 = **0.69207**，w62 = **0.69107**
-- 融合 `0.85 * max(rank(main),rank(alt)) + 0.15 * rank(LGB gen-features)` = **0.69357**
+| 配方 | OOF |
+|---|---:|
+| CatBoost 10-fold × 3-bag × 1-seed 双世界 RMSE | max2 **0.69207** / w62 0.69107 |
+| 同上 × 7 seed（2-bag 额外种子） | max2 0.69214（多种子几乎无增益，臂间 Spearman≈0.97） |
+| W62 特征 + days_q5/车型形状/pow_rate15，10-fold × 3-bag | max2 0.69113 |
+| `0.85*max2(CB) + 0.15*rank(LGB 生成过程特征)` | **0.6936** |
 
-要稳定跨过 **0.70**（对齐历史 W62 的 8seed×3bag），需要把同一套生成过程特征做 **多种子 Ordered+Plain bagging**，而不是再加原始列。脚本：`analysis/reverse/exp8b_gen.py`（pow_ratio、days_q5、freq_score、确认窗口）。
+**W62 协议（OOF 折上 early stopping，10-fold × 3-bag × 3-seed）**
 
-实验 JSON：`analysis/reverse/exp{1-8}*.json`。
+| 配方 | OOF |
+|---|---:|
+| CatBoost Ordered d5 + Plain d6 rsm0.3 | w62 **0.69472** / max2 0.69459 |
+| max2 × 0.80 + LGB × 0.20 | **0.69568** |
+| 8-seed 同协议 | max2 **0.69592** / w62 0.69580 |
+| max2 × 0.80 + LGB × 0.20 | **0.69676** |
+| max(8seed, full-2way-cats) ×0.80 + LGB | **0.69713**（相关 0.99，几乎无新信息） |
+| 全 2-way cats 2seed×3bag val-ES | max2 0.69509（23 cats，无增益） |
+
+历史 W62 本地 0.70159 使用 10-fold×8seed×3bag + 折上 ES + **80+ 手工类别交叉（约 121 列，arm2 rsm=0.3）**。我们用 ~14–23 cats 的 8-seed val-ES 停在 **0.696**。缺口 ~0.005 更像是缺交叉列，不是再多种子（多种子 Spearman≈0.97）。
+
+Inner-ES 把同一套模型压到 0.692，说明 **0.70 数字对早停协议敏感约 +0.003～0.004**。生成过程数值特征进 CatBoost 无增益；高基数 3-way 当类别列无增益。
+
+要在 **Spark GBT** 上接近：同一套数值 + 中基数 TE/整数编码 + RMSE；不要把 `src|cond_q|days_q` 喂树。完整 0.70 需要对 **80+ 两两交叉** 做 Ordered boosting（CatBoostSpark）或把交叉做成折内 TE 分数再 GLM/融合。
