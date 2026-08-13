@@ -326,19 +326,31 @@ def main() -> None:
         interim.append((f"teacher*{w}+lgb", oof, tes, g))
         print(f"  interim {interim[-1][0]:22s} gated={g:.6f}", flush=True)
     ib = max(interim, key=lambda t: t[3])
-    write_submission(
-        test["id"].to_numpy(),
-        ib[2],
-        days_te,
-        {
-            "recipe": "interim teacher+LGB + 4-window gate (CatBoost VAL-ES still training)",
-            "selected": ib[0],
-            "auc_gated": ib[3],
-            "teacher_ungated": tea_auc,
-            "lgb_ungated": auc(y, lgb_oof),
-            "status": "interim",
-        },
-    )
+    # Do not clobber a stronger opus5/assembled submission.
+    existing = SUB / "final_best_report.json"
+    skip_interim = False
+    if existing.is_file():
+        try:
+            prev = json.loads(existing.read_text(encoding="utf-8"))
+            skip_interim = float(prev.get("auc_gated") or 0.0) >= ib[3] - 1e-12
+        except Exception:
+            skip_interim = False
+    if skip_interim:
+        print(f"  skip interim write (existing gated >= {ib[3]:.6f})", flush=True)
+    else:
+        write_submission(
+            test["id"].to_numpy(),
+            ib[2],
+            days_te,
+            {
+                "recipe": "interim teacher+LGB + 4-window gate (CatBoost VAL-ES still training)",
+                "selected": ib[0],
+                "auc_gated": ib[3],
+                "teacher_ungated": tea_auc,
+                "lgb_ungated": auc(y, lgb_oof),
+                "status": "interim",
+            },
+        )
 
     print("=== CatBoost VAL-ES ===", flush=True)
     cb_parts = []
@@ -392,7 +404,7 @@ def main() -> None:
 
     best = max(cands, key=lambda t: t[3])
     report = {
-        "recipe": "VAL-ES CatBoost 10fold x 3bag + LGB + teacher, frozen 4-window gate",
+        "recipe": "VAL-ES CatBoost 10fold x 3bag + LGB + teacher (side pack; assemble_best picks the winner)",
         "n_seed": len(cb_parts),
         "n_bag": N_BAG,
         "seeds": SEEDS[: len(cb_parts)],
@@ -407,13 +419,17 @@ def main() -> None:
         "gate": "floor[1725,1825)+[2110,2210) -0.10[700,880) +0.05[9370,9475)",
         "honest_note": "VAL-ES OOF is slightly optimistic vs no-ES; gate magnitudes frozen",
     }
+    (SUB / "vales_oof.parquet").parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(
         {"id": train["id"], "label": y, "pred_cb_main": oof_m, "pred_cb_alt": oof_a, "pred_lgb": lgb_oof}
-    ).to_parquet(SUB / "final_best_oof.parquet", index=False)
+    ).to_parquet(SUB / "vales_oof.parquet", index=False)
     pd.DataFrame(
         {"id": test["id"], "pred_cb_main": te_m, "pred_cb_alt": te_a, "pred_lgb": lgb_te}
-    ).to_parquet(SUB / "final_best_test.parquet", index=False)
-    write_submission(test["id"].to_numpy(), best[2], days_te, report)
+    ).to_parquet(SUB / "vales_test.parquet", index=False)
+    (SUB / "vales_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    print(f"VAL-ES side pack gated={best[3]:.6f} selected={best[0]} — handing off to assemble_best", flush=True)
+    from assemble_best import main as assemble_main  # noqa: WPS433
+    assemble_main()
 
 
 if __name__ == "__main__":
