@@ -75,7 +75,7 @@ p_hat = rank_fuse({
 })
 ```
 
-诚实 10 折 **0.6705**（5 折 0.6684）。实现：`fit_fold_stats` / `score`（纯 numpy/pandas）。`score` 在**当前批次**上做 `rank(pct=True)`，对应 Spark `percent_rank()`。
+诚实 10 折 **0.6705**（5 折 0.6684）。实现：`fit_fold_stats` / `score`（纯 numpy/pandas）。`score` 在**当前批次**上做 `rank(pct=True)`，对应 Spark `percent_rank()`，这是 **AUC 用的序**，均值约 0.5。定价概率用 `score_prob`：同一权重对四臂 \(p\) 做线性平均再 `clip(0,1)`（exp6 线性融合 10 折 0.6694）。
 
 ### 2.1 样条 \(f_s,g_s\)
 

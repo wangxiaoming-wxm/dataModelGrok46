@@ -30,6 +30,7 @@ from arms import (
     fit_spline_car,
     fit_table8,
     fit_te_ridge,
+    fuse_linear,
     fuse_rank,
     keys_from_edges,
     make_keys,
