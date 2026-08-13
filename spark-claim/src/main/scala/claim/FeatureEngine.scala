@@ -49,11 +49,11 @@ object FeatureEngine {
 
   /** Low-card cats for trees. Do NOT include high-card crosses (those are TE scores only). */
   val LowCardCatsMain: Seq[String] = Seq(
-    "src", "reg", "age", "days_q", "days_q5", "cond_q", "ratio_q", "grades_s", "month_s"
+    "src", "reg", "age", "days_q", "days_q5", "cond_q", "ratio_q", "grades_s", "month_s", "src_dq5"
   )
 
   val LowCardCatsAlt: Seq[String] = Seq(
-    "src", "reg", "age", "days_q", "days_q5", "cond_q", "rate_q", "grades_s", "month_s"
+    "src", "reg", "age", "days_q", "days_q5", "cond_q", "rate_q", "grades_s", "month_s", "src_dq5"
   )
 
   val LowCardCats: Seq[String] = (LowCardCatsMain ++ LowCardCatsAlt).distinct

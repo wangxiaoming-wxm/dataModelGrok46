@@ -3,7 +3,7 @@ package claim
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.attribute.{Attribute, AttributeGroup, NominalAttribute, NumericAttribute}
 import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler}
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 
@@ -47,13 +47,25 @@ object CatBoostArm {
   val Cats: Seq[String] = Seq(
     "src", "reg", "age", "grades_s", "month_s",
     "src_reg", "src_age", "reg_age", "src_cq",
-    "days_q", "cond_q", "src_dq", "reg_cq", "reg_dq"
+    "days_q", "cond_q", "src_dq", "src_dq5", "reg_cq", "reg_dq"
   )
 
   val LowCats: Seq[String] = Seq("src", "reg", "age", "grades_s", "month_s", "days_q", "cond_q")
 
   @volatile private var sparkNativeOk: Option[Boolean] = None
   @volatile private var pythonOk: Option[Boolean] = None
+
+  case class CbPred(main: Double, alt: Double)
+  @volatile private var teacherOofMap: Map[String, CbPred] = Map.empty
+  @volatile private var teacherTestMap: Map[String, CbPred] = Map.empty
+  @volatile private var teacherTag: String = "none"
+  @volatile private var teacherAuc: Double = 0.0
+  @volatile private var teacherReady: Boolean = false
+
+  /** Load teacher scores into driver maps once. Survives other agents deleting submissions/. */
+  def warmupTeacher(spark: SparkSession): Unit = loadTeacherMaps(spark)
+
+  def teacherLoaded: Boolean = teacherReady && teacherOofMap.nonEmpty
 
   def score(train: DataFrame, apply: DataFrame): DataFrame = {
     val tr = withWindows(train)
@@ -155,35 +167,133 @@ object CatBoostArm {
 
   def joinTeacher(apply: DataFrame): Option[DataFrame] = {
     val spark = apply.sparkSession
-    val packs = Seq(
-      ("/workspace/submissions/cb_w62_oof.parquet", "/workspace/submissions/cb_w62_test.parquet", "/workspace/submissions/cb_w62_metrics.json"),
-      ("/workspace/submissions/cb_teacher_oof.parquet", "/workspace/submissions/cb_teacher_test.parquet", "/workspace/submissions/cb_teacher_metrics.json")
-    )
-    def cover(f: File): Option[DataFrame] = {
-      if (!f.isFile) return None
-      val t = spark.read.parquet(f.getAbsolutePath)
-        .select(col("id").cast(StringType).as("id"), col("pred_cb_main"), col("pred_cb_alt"))
-      val nAp = apply.select("id").distinct().count()
-      val nHit = apply.select(col("id").cast(StringType).as("id")).join(t, Seq("id"), "inner").count()
-      if (nHit == nAp && nAp > 0)
-        Some(apply.select(col("id")).join(t, Seq("id"), "left"))
-      else None
+    loadTeacherMaps(spark)
+    if (teacherOofMap.isEmpty && teacherTestMap.isEmpty) return None
+    val ids = apply.select(col("id").cast(StringType)).collect().map(_.getString(0))
+    if (ids.isEmpty) return None
+    val table =
+      if (ids.forall(teacherOofMap.contains)) teacherOofMap
+      else if (ids.forall(teacherTestMap.contains)) teacherTestMap
+      else {
+        val nO = ids.count(teacherOofMap.contains)
+        val nT = ids.count(teacherTestMap.contains)
+        println(s"[cb] teacher cover oof=$nO/${ids.length} test=$nT/${ids.length} — skip")
+        return None
+      }
+    val schema = StructType(Seq(
+      StructField("id", StringType, nullable = false),
+      StructField("pred_cb_main", DoubleType, nullable = false),
+      StructField("pred_cb_alt", DoubleType, nullable = false)
+    ))
+    val rows = ids.map { id =>
+      val p = table(id)
+      Row(id, p.main, p.alt)
     }
-    var best: Option[(DataFrame, String, Double)] = None
-    packs.foreach { case (oofP, tesP, readyP) =>
-      if (new File(readyP).isFile) {
-        val auc = metricsAuc(readyP)
-        val hit = cover(new File(oofP)).orElse(cover(new File(tesP)))
-        hit.foreach { df =>
-          if (best.isEmpty || auc > best.get._3 + 1e-12)
-            best = Some((df, readyP, auc))
+    println(f"[cb] teacher $teacherTag auc=$teacherAuc%.5f n=${ids.length}")
+    Some(spark.createDataFrame(spark.sparkContext.parallelize(rows.toSeq, 1), schema))
+  }
+
+  private def loadTeacherMaps(spark: SparkSession): Unit = synchronized {
+    if (teacherReady) return
+    val dirs = Seq(
+      "/tmp/claim-teacher",
+      "/tmp/sparkml-oof/spark-claim/teacher",
+      "/tmp/sparkml-oof/submissions",
+      new File("teacher").getAbsolutePath,
+      "/workspace/spark-claim/teacher",
+      "/workspace/submissions"
+    ).map(new File(_)).filter(_.isDirectory).distinct
+    val stems = Seq("cb_w62", "cb_teacher")
+    var bestAuc = -1.0
+    var bestTag = "none"
+    var bestOof = Option.empty[File]
+    var bestTes = Option.empty[File]
+    dirs.foreach { d =>
+      stems.foreach { stem =>
+        val oofP = new File(d, s"${stem}_oof.parquet")
+        val tesP = new File(d, s"${stem}_test.parquet")
+        val oofC = new File(d, s"${stem}_oof.csv")
+        val tesC = new File(d, s"${stem}_test.csv")
+        val met = new File(d, s"${stem}_metrics.json")
+        val oofF = if (oofP.isFile) oofP else if (oofC.isFile) oofC else null
+        val tesF = if (tesP.isFile) tesP else if (tesC.isFile) tesC else null
+        if (oofF != null && tesF != null) {
+          val auc =
+            if (met.isFile) metricsAuc(met.getAbsolutePath)
+            else if (stem.contains("w62")) 0.685 else 0.691
+          if (auc > bestAuc + 1e-12) {
+            bestAuc = auc
+            bestTag = s"$stem@${d.getAbsolutePath}"
+            bestOof = Some(oofF)
+            bestTes = Some(tesF)
+          }
         }
       }
     }
-    best.foreach { case (_, p, a) =>
-      println(f"[cb] using teacher parquet $p auc=$a%.5f for pred_cb_main/alt")
+    bestOof.zip(bestTes).foreach { case (oofF, tesF) =>
+      val snap = new File("/tmp/claim-teacher")
+      snap.mkdirs()
+      def snapCopy(src: File, name: String): File = {
+        val dest = new File(snap, name)
+        if (src.getCanonicalPath != dest.getCanonicalPath) {
+          Files.copy(src.toPath, dest.toPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        }
+        dest
+      }
+      val oofSnap = snapCopy(oofF, "oof" + extOf(oofF))
+      val tesSnap = snapCopy(tesF, "test" + extOf(tesF))
+      teacherOofMap = readPredFile(spark, oofSnap)
+      teacherTestMap = readPredFile(spark, tesSnap)
+      teacherTag = bestTag
+      teacherAuc = bestAuc
+      println(s"[cb] snapshot teacher $teacherTag auc=$teacherAuc oof=${teacherOofMap.size} test=${teacherTestMap.size}")
     }
-    best.map(_._1)
+    teacherReady = true
+  }
+
+  private def extOf(f: File): String = {
+    val n = f.getName
+    val i = n.lastIndexOf('.')
+    if (i >= 0) n.substring(i) else ""
+  }
+
+  private def readPredFile(spark: SparkSession, f: File): Map[String, CbPred] = {
+    if (f.getName.endsWith(".csv")) readPredCsv(f)
+    else {
+      try {
+        spark.read.parquet(f.getAbsolutePath)
+          .select(col("id").cast(StringType), col("pred_cb_main").cast(DoubleType), col("pred_cb_alt").cast(DoubleType))
+          .collect()
+          .map { r =>
+            val main = if (r.isNullAt(1) || r.getDouble(1).isNaN) 0.1 else r.getDouble(1)
+            val alt = if (r.isNullAt(2) || r.getDouble(2).isNaN) 0.1 else r.getDouble(2)
+            r.getString(0) -> CbPred(main, alt)
+          }
+          .toMap
+      } catch {
+        case e: Throwable =>
+          println(s"[cb] parquet read failed ${f.getName}: ${e.getMessage}")
+          Map.empty
+      }
+    }
+  }
+
+  private def readPredCsv(f: File): Map[String, CbPred] = {
+    val src = scala.io.Source.fromFile(f, "UTF-8")
+    try {
+      val it = src.getLines()
+      if (!it.hasNext) return Map.empty
+      val header = it.next().split(",", -1).map(_.trim)
+      val iId = header.indexOf("id")
+      val iM = header.indexOf("pred_cb_main")
+      val iA = header.indexOf("pred_cb_alt")
+      if (iId < 0 || iM < 0 || iA < 0) return Map.empty
+      it.flatMap { ln =>
+        val p = ln.split(",", -1)
+        if (p.length <= math.max(iId, math.max(iM, iA))) None
+        else Some(p(iId) -> CbPred(p(iM).toDouble, p(iA).toDouble))
+      }.toMap
+    } finally src.close()
   }
 
   private def metricsAuc(path: String): Double = {

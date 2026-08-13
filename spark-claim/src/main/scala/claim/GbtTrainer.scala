@@ -104,7 +104,7 @@ object GbtTrainer {
       .setMaxBins(64)
       .setSeed(spec.seed)
       .setCacheNodeIds(true)
-      .setMaxMemoryInMB(512)
+      .setMaxMemoryInMB(256)
 
     val pipe = new Pipeline().setStages((indexers :+ assembler :+ gbt).toArray)
     val model = pipe.fit(trainF)

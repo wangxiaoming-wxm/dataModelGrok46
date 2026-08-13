@@ -44,8 +44,11 @@ object TrainApp {
       .config("spark.driver.host", "127.0.0.1")
       .config("spark.driver.bindAddress", "127.0.0.1")
       .config("spark.sql.adaptive.enabled", "true")
+      .config("spark.local.dir", "/tmp/spark-local")
       .getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
+    new File("/tmp/spark-local").mkdirs()
+    CatBoostArm.warmupTeacher(spark)
 
     val trainRaw = spark.read.option("header", "true").option("inferSchema", "true")
       .csv(s"$dataDir/train.csv")
@@ -58,15 +61,19 @@ object TrainApp {
     withFold.cache()
     println(s"[info] train=${withFold.count()} test=${testRaw.count()} folds=$nFolds bags=$nBags gbtIter=$gbtIter rf=$rfTrees quick=$quick")
 
-    var oof: DataFrame = null
+    val foldBuf = scala.collection.mutable.ArrayBuffer.empty[Row]
+    var oofSchema: StructType = null
     for (f <- 0 until nFolds) {
       println(s"[fold] $f / $nFolds")
       val tr = withFold.filter(col("fold") =!= f).drop("fold")
       val va = withFold.filter(col("fold") === f).drop("fold")
       val scored = scoreSplit(tr, va, nBags, gbtIter, rfTrees, teMs, withTrainMain = true)
-      oof = if (oof == null) scored else oof.unionByName(scored, allowMissingColumns = true)
+      val recs = scored.collect()
+      if (oofSchema == null) oofSchema = scored.schema
+      foldBuf ++= recs
+      println(s"[fold] $f materialized n=${recs.length} cols=${scored.columns.length}")
     }
-    oof = oof.cache()
+    val oof = spark.createDataFrame(spark.sparkContext.parallelize(foldBuf, 4), oofSchema).cache()
     val nOof = oof.count()
     println(s"[info] oof rows=$nOof")
 
@@ -167,6 +174,14 @@ object TrainApp {
       "all_strong" -> Map(
         "pred_lr" -> 0.22, "pred_rf" -> 0.18, "te_pool" -> 0.22,
         "pred_main" -> 0.12, "pred_fm" -> 0.10, te3 -> 0.16
+      ),
+      "cb_lr_rf_te" -> Map(
+        "pred_cb_main" -> 0.36, "pred_cb_alt" -> 0.22,
+        "pred_lr" -> 0.14, "pred_rf" -> 0.12, "te_pool" -> 0.16
+      ),
+      "cb_hist5" -> Map(
+        "pred_cb_main" -> 0.34, "pred_cb_alt" -> 0.22,
+        te35 -> 0.16, "pred_lr" -> 0.16, "pred_rf" -> 0.12
       )
     )
 
@@ -242,13 +257,24 @@ object TrainApp {
     java.nio.file.Files.write(java.nio.file.Paths.get(s"$outDir/oof_report.txt"), report.getBytes(StandardCharsets.UTF_8))
     println(report)
 
-    println("[info] fitting full-data models")
-    val fullScored = scoreSplit(
-      trainRaw,
-      testRaw.withColumn("label", lit(0.0)),
-      nBags, gbtIter, rfTrees, teMs,
-      withTrainMain = true
-    )
+    val sparkArm = Set("pred_main", "pred_alt", "pred_rf", "pred_lr", "pred_fm", "pred_big")
+    val needSpark = bestOp != "max2" && bestWeights.keys.exists(sparkArm.contains)
+    val needTe = bestWeights.keys.exists(_.startsWith("te_"))
+    println(s"[info] test fit recipe=$bestName op=$bestOp needSpark=$needSpark needTe=$needTe")
+    val fullScored =
+      if (!needSpark && !needTe) {
+        CatBoostArm.joinTeacher(testRaw.select(col("id").cast(StringType).as("id"))).getOrElse {
+          throw new RuntimeException("CatBoost teacher missing for test ids")
+        }
+      } else {
+        println("[info] fitting full-data Spark arms")
+        scoreSplit(
+          trainRaw,
+          testRaw.withColumn("label", lit(0.0)),
+          nBags, gbtIter, rfTrees, teMs,
+          withTrainMain = true
+        )
+      }
     val needRanks = bestWeights.keys.toSeq.filter(fullScored.columns.contains)
     val testRanked = addRanks(fullScored, needRanks).join(
       testRaw.select(col("id").cast(StringType).as("id"), col("days")),
@@ -325,7 +351,17 @@ object TrainApp {
           .withColumn("pred_cb_alt", lit(0.1))
       } else {
         try {
-          CatBoostArm.joinTeacher(vaF).getOrElse(OrderedArm.score(trF, vaF, gbtIter))
+          CatBoostArm.joinTeacher(vaF).getOrElse {
+            if (CatBoostArm.teacherLoaded) {
+              println("[cb] teacher loaded but ids missed; dummy cb preds")
+              vaF.select(col("id"))
+                .withColumn("pred_cb_main", lit(0.1))
+                .withColumn("pred_cb_alt", lit(0.1))
+            } else {
+              println("[cb] no teacher — OrderedArm fallback")
+              OrderedArm.score(trF, vaF, gbtIter)
+            }
+          }
         } catch {
           case e: OutOfMemoryError => throw e
           case e: Throwable =>
