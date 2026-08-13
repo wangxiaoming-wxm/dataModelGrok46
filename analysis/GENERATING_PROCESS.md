@@ -249,6 +249,7 @@ Spark 可实现：数值、分箱、折内 TE 分数、GBT。高基数 `source|c
 - CatBoost teacher：10-fold × 3-bag × 1-seed，RMSE，中基数类别（无 src_cq_dq 原生列），inner-ES  
   max2 = **0.69207**，w62 = **0.69107**
 - 融合 `0.85 * max(rank(main),rank(alt)) + 0.15 * rank(LGB gen-features)` = **0.69357**
+- **保司硬门**（冻结，不搜参）：teacher max2 0.69207 → **0.69310–0.69325**。见 `analysis/ADVERSARIAL.md`。
 
 要稳定跨过 **0.70**（对齐历史 W62 的 8seed×3bag），需要把同一套生成过程特征做 **多种子 Ordered+Plain bagging**，而不是再加原始列。脚本：`analysis/reverse/exp8b_gen.py`（pow_ratio、days_q5、freq_score、确认窗口）。
 
@@ -268,7 +269,7 @@ s=0.40\,\mathrm{rank}(\mathrm{GBT}_{\mathrm{RMSE},400})+0.30\,\mathrm{rank}(\mat
 
 权重预置（非 10 折上搜索）。5 折冻权同栈 0.6817。Spark：`GBTRegressor` squared、固定 400 棵、禁止 ES；`src|cq|dq` 只做表/TE，不进树。
 
-无树闭合 rank（ordered TE 0.45 + 8 邻域表 0.25 + 样条 0.20 + 幂次 0.10）= **0.6696**。`portable_score.py` 实现这一支。
+无树闭合 rank（ordered TE 0.45 + 8 邻域表 0.25 + 样条 0.20 + 幂次 0.10）= **0.6705**（`portable_score.py` 10 折复测）。
 
 相对本文 §2 的 2D 表 0.644：8 邻域 + 全局层次 \(\alpha=0.40\) 把 **source×days_q5×cond_q10** 提到 **0.6577**。LOSO 确认 8 邻域优于无平滑，但跨车型全局面只有 ~0.59，分源表仍必要。
 

@@ -12,7 +12,7 @@ s=0.40\,\mathrm{rank}(\mathrm{GBT}_1)+0.30\,\mathrm{rank}(\mathrm{TE}_{\mathrm{o
 
 该权重是代码里预先写死的（不是 10 折上搜出来的）。5 折筛出的另一组权重 10 折为 **0.6817**。
 
-无树的闭合身份公式 10 折 **0.6696**（见 §2）。第 1 名 0.749 仍高于此；剩余差距主要在多种子有序 boosting，不是再加原始列。
+无树的闭合身份公式 10 折 **0.6705**（`portable_score.py` 复测；exp6 冻权 0.6696）。第 1 名 0.749 仍高于此；剩余差距主要在多种子有序 boosting，不是再加原始列。
 
 ---
 
@@ -48,7 +48,7 @@ y\sim\mathrm{Bernoulli}(p),\qquad r=\mathrm{rank}(\mathrm{condition}\mid s)
 |---|---:|---|
 | **GBT + TE + 表 + 样条 rank（预置权）** | **0.6822** | GBTRegressor + 表 + Ridge + percent_rank |
 | 5 折冻权 GBT 栈 | 0.6817 | 同上 |
-| 闭合身份 rank（TE+表+样条+幂） | 0.6696 | 无树 |
+| 闭合身份 rank（TE+表+样条+幂） | **0.6705** | 无树，`portable_score.py` |
 | 等权 rank(样条, 表, TE_ord) | 0.6680 | 无树 |
 | TE Ridge（14 键，LOO） | 0.6665 | 折内 sum/count |
 | Ordered TE Ridge | 0.6662 | 随机序 expanding mean（训练折） |
@@ -75,7 +75,7 @@ p_hat = rank_fuse({
 })
 ```
 
-诚实 10 折 **0.6696**。实现：`fit_fold_stats` / `score`（纯 numpy/pandas）。`score` 在**当前批次**上做 `rank(pct=True)`，对应 Spark `percent_rank()`。
+诚实 10 折 **0.6705**（5 折 0.6684）。实现：`fit_fold_stats` / `score`（纯 numpy/pandas）。`score` 在**当前批次**上做 `rank(pct=True)`，对应 Spark `percent_rank()`。
 
 ### 2.1 样条 \(f_s,g_s\)
 
@@ -172,7 +172,7 @@ CAR_1 / CAR_10 对 condition 敏感（\(b\) 大）；CAR_5/7/9 几乎只看 days
 - **joint 大矩阵 Ridge**：样条+表+TE+x20 拼在一起 → 0.623，共线，已弃。融合必须 **分臂再 rank**。
 - **g 建在原始 condition**：不如 rank（5 折 0.6505 vs 0.6531）。
 - **2D 再细**：d15 历史掉到 0.59；本次 d8×c10 8 邻域 5 折 0.6576，与 d5×c10 同级。
-- **无树封顶 ~0.67**：线性张成 + 查找表 + TE 到 0.6696。过 0.68 需要 GBT/有序 boosting。
+- **无树封顶 ~0.67**：线性张成 + 查找表 + TE 到 0.6705。过 0.68 需要 GBT/有序 boosting。
 - **LGB 600 轮 < 400 轮**（5 折 0.642 vs 0.648）：固定轮数不要过大。
 
 ---
