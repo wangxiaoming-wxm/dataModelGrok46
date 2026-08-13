@@ -97,20 +97,6 @@ def src_index(src, levels):
     return np.array([mp.get(s, -1) for s in np.asarray(src).astype(str)], dtype=int)
 
 
-def hierarchical(src_grid, glob_grid, src_idx, alpha):
-    """(1-alpha)*source + alpha*global, global is src_grid averaged over sources with counts."""
-    # glob_grid shape (1 or n, nd, nc) — we pass a (nd,nc) array
-    g = glob_grid[src_idx] if glob_grid.ndim == 3 else glob_grid[np.clip(src_idx, 0, 0)]
-    # actually we'll pass glob as (nd,nc)
-    if glob_grid.ndim == 2:
-        g = glob_grid[np.clip(np.asarray(src_idx) * 0, 0, 0)]  # placeholder
-        # vectorized:
-        dbin_shape = src_grid.shape
-        # caller should lookup first
-        raise ValueError("lookup first")
-    return (1 - alpha) * src_grid + alpha * glob_grid
-
-
 def predict_table(src, dbin, cbin, src_levels, sm, ct, prior, m, neigh, alpha_glob=0.0, glob=None):
     idx = src_index(src, src_levels)
     # unknown source -> last extra slot if present, else 0
