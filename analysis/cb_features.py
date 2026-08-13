@@ -84,16 +84,21 @@ NUM_ALT = [
     "cond_miss",
 ]
 
-# W62 numeric: dual-world + v6 ratios + power-rate + windows. No x18/x19/id.
+# W62 numeric: dual-world + v6 ratios + power-rate + windows + fold-safe z. No x18/x19/id.
 NUM_MAIN_W62 = [
     "days",
     "days_log",
+    "days_sqrt",
+    "days2",
     "condition_f",
+    "cond_log",
     "cond_r",
     "ratio",
     "ratio_sqrt",
+    "log_ratio",
     "u_shape",
     "inv_cond",
+    "days_x_inv",
     "age_num",
     "V",
     "cc",
@@ -113,11 +118,13 @@ NUM_MAIN_W62 = [
     "ushape_car10",
     "mono_car1",
     "rev_car7",
-    "days_sqrt",
+    "cond_z",
+    "days_z",
     "age8",
     "cond_low",
     "safe_750",
     "safe_1750",
+    "safe_1950",
     "w_9370",
     "days_lt50",
     "t3_num",
@@ -129,6 +136,7 @@ NUM_ALT_W62 = [
     "days_log",
     "days_sqrt",
     "condition_f",
+    "cond_log",
     "cond_rk",
     "rate",
     "pow_rate15",
@@ -137,6 +145,8 @@ NUM_ALT_W62 = [
     "ushape_car10",
     "mono_car1",
     "rev_car7",
+    "cond_z",
+    "days_z",
     "age_num",
     "V",
     "cc",
@@ -152,6 +162,7 @@ NUM_ALT_W62 = [
     "cond_low",
     "safe_750",
     "safe_1750",
+    "safe_1950",
     "w_9370",
     "days_lt50",
     "t3_num",
@@ -284,6 +295,13 @@ def fold_features(
             src_tr, cf_tr, df["source"].to_numpy(), df["condition_f"].to_numpy()
         )
 
+    src_mean_c = trn.groupby("source")["condition_f"].mean()
+    src_std_c = trn.groupby("source")["condition_f"].std().replace(0, np.nan)
+    src_std_c = src_std_c.fillna(float(src_std_c.median()) if src_std_c.notna().any() else 1.0)
+    src_mean_d = trn.groupby("source")["days"].mean()
+    src_std_d = trn.groupby("source")["days"].std().replace(0, np.nan)
+    src_std_d = src_std_d.fillna(float(src_std_d.median()) if src_std_d.notna().any() else 1.0)
+
     for df in frames:
         df["ratio"] = df["days"] / df["cond_r"]
         df["rate"] = df["days"] * (1.0 - df["cond_rk"])
@@ -292,6 +310,14 @@ def fold_features(
         df["inv_cond"] = 1.0 / df["condition_f"].clip(lower=1e-4)
         df["days_log"] = np.log1p(df["days"])
         df["days_sqrt"] = np.sqrt(df["days"].clip(lower=0.0))
+        df["days2"] = np.square(df["days"])
+        df["cond_log"] = np.log1p(df["condition_f"].clip(lower=0.0))
+        df["log_ratio"] = np.log1p(df["ratio"].clip(lower=0.0))
+        df["days_x_inv"] = df["days"] * df["inv_cond"]
+        den_c = df["source"].map(src_std_c).replace(0, np.nan)
+        den_d = df["source"].map(src_std_d).replace(0, np.nan)
+        df["cond_z"] = (df["condition_f"] - df["source"].map(src_mean_c)) / den_c
+        df["days_z"] = (df["days"] - df["source"].map(src_mean_d)) / den_d
         df["age_num"] = pd.to_numeric(df["age_range"], errors="coerce").fillna(0.0)
         df["age8"] = (df["age_num"] >= 8).astype(np.int8)
         df["cond_low"] = (df["condition_f"] < 0.05).astype(np.int8)
