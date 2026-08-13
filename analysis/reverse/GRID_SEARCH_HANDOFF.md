@@ -111,7 +111,8 @@ clone 后本地：`data/train.csv`（14930×45，正例率 0.1002）、`data/tes
 4. 丢弃 x18、x19。
 5. 稀疏 `src|cond_q|days_q` 不要当 CatBoost 类别列。
 6. 保司硬门冻结（rank 融合之后）：
-   - days ∈ [1725,1825) → 全体最低（train n=103 全零）
+   - days ∈ [1725,1825) → 全体最低（train n=103 全零，~5×365）
+   - days ∈ [2110,2210) → 全体最低（train n=142 率 2.8%，~6×365；嵌套 10/10）
    - days ∈ [700,880) → 秩 −0.10
    - days ∈ [9370,9475) → 秩 +0.05
    然后再 rank01 压回 [0,1]。实现见 `analysis/insurer_gate.py`。
@@ -179,7 +180,8 @@ clone 后本地：`data/train.csv`（14930×45，正例率 0.1002）、`data/tes
 | 模型 | 协议 | AUC |
 |---|---|---|
 | 历史 W62 8seed×3bag | HONEST | 0.70159 / 线上 0.71503 |
-| teacher 10fold×3bag×1seed + 硬门 | HONEST | **0.69353**（当前提交，仍用这个） |
+| teacher 10fold×3bag×1seed + 硬门（含 6y） | HONEST | **0.69431**（当前提交） |
+| teacher 10fold×3bag×1seed + 旧三窗硬门 | HONEST | 0.69353 |
 | teacher max2 无硬门 | inner 12% ES | 0.69207 |
 | exp8h 8seed×3bag ⊕ LGB | VAL_ES | **0.69713**（略乐观，不作提交） |
 | exp8h 8seed×3bag | VAL_ES | w62 0.69580 / max2 0.69592 |

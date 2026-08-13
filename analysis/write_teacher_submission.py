@@ -111,7 +111,7 @@ def main() -> None:
         f"auc_insurer_gate={auc_gated:.6f}\n"
         f"selected={'cb_max2' if use_max else 'cb_w62'}+insurer_gate\n"
         f"auc_blend={auc_gated:.6f}\n"
-        f"gate=zero[1725,1825) rank-0.10[700,880) rank+0.05[9370,9475); submit=rank01(gated)\n"
+        f"gate=zero[1725,1825)+[2110,2210) rank-0.10[700,880) rank+0.05[9370,9475); submit=rank01(gated)\n"
         f"note=Spark ML Scala pipeline consumes teacher via CatBoostArm.joinTeacher / BlendApp\n"
     )
     (SUB / "oof_report_teacher.txt").write_text(report, encoding="utf-8")

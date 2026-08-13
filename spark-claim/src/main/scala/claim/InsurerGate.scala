@@ -7,7 +7,8 @@ import org.apache.spark.sql.functions._
  * Frozen customer/insurer overlay on rank-space scores.
  *
  * Insurer will not pay in warranty pits (GENERATING_PROCESS confirm):
- *   [1725,1825) all-zero n=103; [700,880) rate 3.07%.
+ *   [1725,1825) all-zero n=103 (~5y); [700,880) rate 3.07% (~2y);
+ *   [2110,2210) rate 2.8% n=142 (~6y, nested 10/10).
  * Customer dumps claims near cover end: [9370,9475) rate 18.9%.
  *
  * Apply AFTER rank fusion. Magnitudes are frozen — do not grid-search on full OOF.
@@ -23,6 +24,7 @@ object InsurerGate {
     df.withColumn(
       scoreCol,
       when(d >= 1725.0 && d < 1825.0, lit(-1.0))
+        .when(d >= 2110.0 && d < 2210.0, lit(-1.0))
         .when(d >= 700.0 && d < 880.0, s - lit(Shift750))
         .when(d >= 9370.0 && d < 9475.0, s + lit(ShiftHot))
         .otherwise(s)
