@@ -1,0 +1,8 @@
+{
+  "mlp_64_32": 0.641867121813198,
+  "mlp_32_tanh": 0.633615351821024,
+  "hgb_numeric_plus_cats": 0.6569129011789864,
+  "knn70": 0.6470034179776909,
+  "catboost_core5": 0.6690640825537246,
+  "note": "If MLP>=0.70, distill embeddings into portable features. Remaining gap to 0.75 is unused signal or irreducible noise."
+}

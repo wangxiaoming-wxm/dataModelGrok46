@@ -1,0 +1,8 @@
+{
+  "nw_per_source": 0.6472154120083211,
+  "grid16x10_per_source": 0.6307323972059082,
+  "nw_global": 0.6314077378890978,
+  "hd": 800.0,
+  "hc": 0.45,
+  "spark": "Store per-source 16x10 (or 20x12) smoothed mean table; lookup by train-fold quantile edges + neighbor pooling."
+}
