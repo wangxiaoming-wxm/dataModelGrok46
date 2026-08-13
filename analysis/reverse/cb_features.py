@@ -34,6 +34,12 @@ NUM_MAIN = [
     "days_lt50",
     "t3_num",
     "cond_miss",
+    "pow_rate15",
+    "pow_ratio",
+    "ushape_car10",
+    "mono_car1",
+    "rev_car7",
+    "w_hot9374",
 ]
 
 NUM_ALT = [
@@ -57,6 +63,10 @@ NUM_ALT = [
     "days_lt50",
     "t3_num",
     "cond_miss",
+    "pow_rate15",
+    "ushape_car10",
+    "mono_car1",
+    "w_hot9374",
 ]
 
 # Medium-cardinality cats for native CatBoost. NO src_cq_dq / 3-way.
@@ -75,6 +85,8 @@ CATS = [
     "src_dq",
     "reg_cq",
     "reg_dq",
+    "days_q5",
+    "src_dq5",
 ]
 
 HIGH_TE_KEYS = ["src_cq_dq", "cq_dq", "src_ratioq"]
@@ -157,8 +169,18 @@ def fold_features(trn: pd.DataFrame, val: pd.DataFrame) -> tuple[pd.DataFrame, p
         df["safe_1750"] = ((df["days"] >= 1725) & (df["days"] < 1825)).astype(np.int8)
         df["safe_1950"] = ((df["days"] >= 1950) & (df["days"] < 2000)).astype(np.int8)
         df["days_lt50"] = (df["days"] < 50).astype(np.int8)
+        df["pow_rate15"] = np.power(np.clip(df["days"].to_numpy(float), 1, None), 1.5) * np.power(
+            np.clip(1.0 - df["cond_rk"].to_numpy(float), 1e-6, None), 1.23
+        )
+        car = df["source"].astype(str).str.split("|").str[0]
+        df["ushape_car10"] = df["u_shape"].to_numpy(float) * (car == "CAR_10").astype(float)
+        df["mono_car1"] = (1.0 - df["cond_rk"].to_numpy(float)) * (car == "CAR_1").astype(float)
+        df["rev_car7"] = df["cond_rk"].to_numpy(float) * (car == "CAR_7").astype(float)
+        df["w_hot9374"] = ((df["days"] >= 9370) & (df["days"] < 9475)).astype(np.int8)
+        df["pow_ratio"] = df["days"].to_numpy(float) / np.power(np.clip(df["condition_f"].to_numpy(float), 1e-6, None), 0.5)
 
     trn["days_q"], val["days_q"] = _qcut_apply(trn["days"], val["days"])
+    trn["days_q5"], val["days_q5"] = _qcut_apply(trn["days"], val["days"], q=5)
     trn["cond_q"], val["cond_q"] = _qcut_apply(trn["condition_f"], val["condition_f"])
     trn["ratio_q"], val["ratio_q"] = _qcut_apply(trn["ratio"], val["ratio"])
     trn["rate_q"], val["rate_q"] = _qcut_apply(trn["rate"], val["rate"])
@@ -174,6 +196,7 @@ def fold_features(trn: pd.DataFrame, val: pd.DataFrame) -> tuple[pd.DataFrame, p
         df["reg_age"] = df["region"] + "|" + df["age_range"]
         df["src_cq"] = df["source"] + "|" + df["cond_q"]
         df["src_dq"] = df["source"] + "|" + df["days_q"]
+        df["src_dq5"] = df["source"] + "|" + df["days_q5"].astype(str)
         df["reg_cq"] = df["region"] + "|" + df["cond_q"]
         df["reg_dq"] = df["region"] + "|" + df["days_q"]
         df["cq_dq"] = df["cond_q"] + "|" + df["days_q"]
