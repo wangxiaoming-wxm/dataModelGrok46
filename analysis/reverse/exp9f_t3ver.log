@@ -1,0 +1,107 @@
+  base fold 0 auc=0.6985 it=447 nc=23
+  base fold 1 auc=0.6802 it=396 nc=23
+  base fold 2 auc=0.6942 it=599 nc=23
+  base fold 3 auc=0.6654 it=370 nc=23
+  base fold 4 auc=0.7006 it=565 nc=23
+=== base OOF 0.68733 dt=111.7s ===
+  blends 0.6940354915972642 0.6955638837206896
+  t3 fold 0 auc=0.7007 it=591 nc=24
+  t3 fold 1 auc=0.6767 it=371 nc=24
+  t3 fold 2 auc=0.6950 it=584 nc=24
+  t3 fold 3 auc=0.6648 it=389 nc=24
+  t3 fold 4 auc=0.7042 it=598 nc=24
+=== t3 OOF 0.68789 dt=120.5s ===
+  blends 0.6946663734924317 0.6956593693549531
+  ver fold 0 auc=0.6990 it=592 nc=24
+  ver fold 1 auc=0.6814 it=390 nc=24
+  ver fold 2 auc=0.6969 it=579 nc=24
+  ver fold 3 auc=0.6620 it=377 nc=24
+  ver fold 4 auc=0.6976 it=582 nc=24
+=== ver OOF 0.68709 dt=121.8s ===
+  blends 0.6934742709256344 0.6955054678089516
+  t3ver fold 0 auc=0.6969 it=592 nc=25
+  t3ver fold 1 auc=0.6807 it=359 nc=25
+  t3ver fold 2 auc=0.6976 it=583 nc=25
+  t3ver fold 3 auc=0.6651 it=421 nc=25
+  t3ver fold 4 auc=0.7011 it=599 nc=25
+=== t3ver OOF 0.68795 dt=130.5s ===
+  blends 0.6947326262918176 0.6956603645152892
+  t3let fold 0 auc=0.7071 it=578 nc=24
+  t3let fold 1 auc=0.6808 it=403 nc=24
+  t3let fold 2 auc=0.6958 it=487 nc=24
+  t3let fold 3 auc=0.6642 it=392 nc=24
+  t3let fold 4 auc=0.6962 it=492 nc=24
+=== t3let OOF 0.68855 dt=120.5s ===
+  blends 0.6947395426561547 0.6956895227131414
+  lang fold 0 auc=0.6995 it=599 nc=23
+  lang fold 1 auc=0.6806 it=369 nc=23
+  lang fold 2 auc=0.6953 it=467 nc=23
+  lang fold 3 auc=0.6634 it=402 nc=23
+  lang fold 4 auc=0.7031 it=595 nc=23
+=== lang OOF 0.68791 dt=113.5s ===
+  blends 0.6946219644624264 0.6956478503740608
+DONE [
+  {
+    "name": "base",
+    "oof": 0.68732671770645,
+    "n_cats": 23,
+    "extra": [],
+    "dt": 111.73856163024902,
+    "blend_max": 0.6940354915972642,
+    "blend_08": 0.6955638837206896
+  },
+  {
+    "name": "t3",
+    "oof": 0.687890650189996,
+    "n_cats": 24,
+    "extra": [
+      "t3"
+    ],
+    "dt": 120.50299787521362,
+    "blend_max": 0.6946663734924317,
+    "blend_08": 0.6956593693549531
+  },
+  {
+    "name": "ver",
+    "oof": 0.6870875060406233,
+    "n_cats": 24,
+    "extra": [
+      "version"
+    ],
+    "dt": 121.75199818611145,
+    "blend_max": 0.6934742709256344,
+    "blend_08": 0.6955054678089516
+  },
+  {
+    "name": "t3ver",
+    "oof": 0.6879479216673474,
+    "n_cats": 25,
+    "extra": [
+      "t3",
+      "version"
+    ],
+    "dt": 130.49989676475525,
+    "blend_max": 0.6947326262918176,
+    "blend_08": 0.6956603645152892
+  },
+  {
+    "name": "t3let",
+    "oof": 0.688548998510444,
+    "n_cats": 24,
+    "extra": [
+      "t3_letter"
+    ],
+    "dt": 120.47113752365112,
+    "blend_max": 0.6947395426561547,
+    "blend_08": 0.6956895227131414
+  },
+  {
+    "name": "lang",
+    "oof": 0.6879149569812091,
+    "n_cats": 23,
+    "extra": [],
+    "dt": 113.48576664924622,
+    "blend_max": 0.6946219644624264,
+    "blend_08": 0.6956478503740608
+  }
+]
