@@ -1,0 +1,8 @@
+sparkml_teacher_blend
+teacher=cb_teacher
+n_test=6398
+auc_w62=0.691069
+auc_max2=0.692074
+selected=cb_max2
+auc_blend=0.692074
+note=Spark ML Scala pipeline consumes this teacher via CatBoostArm.joinTeacher / BlendApp

@@ -1,0 +1,13 @@
+spark-claim/target/
+spark-claim/project/target/
+spark-claim/project/project/
+*.npy
+*.npz
+*.pyc
+__pycache__/
+.idea/
+submissions/*_dir/
+.bsp/
+analysis/cb_teacher.log
+analysis/cb_w62_ckpt/
+spark-claim/cb-sidecar/

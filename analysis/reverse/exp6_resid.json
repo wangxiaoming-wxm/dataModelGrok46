@@ -1,0 +1,17 @@
+{
+  "isotonic_ratio_oof": 0.6127579356075533,
+  "isotonic_rate_oof": 0.6164465720308994,
+  "third_arm_oof": 0.6496113102758665,
+  "resid_hgb_as_score": 0.5909967396557063,
+  "leftover_residual_both_auc_mean": {
+    "age": 0.08191265987185217,
+    "x20": 0.13448681254181719,
+    "V": 0.122592822292986,
+    "cc": 0.10545524100607621,
+    "livability": 0.01010072461938821,
+    "x1": 0.09415432381784394,
+    "x5": 0.09109372601504448,
+    "region_resid_mean": 0.012258145867788034
+  },
+  "note": "After isotonic(ratio), leftover both-AUC of region/age/x20/V. Third arm = iso(ratio)+residual HGB+region TE."
+}
