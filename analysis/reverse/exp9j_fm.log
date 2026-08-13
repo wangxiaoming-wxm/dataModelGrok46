@@ -1,0 +1,7 @@
+fold 0 auc=0.6144
+fold 1 auc=0.5510
+fold 2 auc=0.5841
+fold 3 auc=0.5539
+fold 4 auc=0.5649
+FM OOF 0.5670353188374297
+blend 0.85h+0.15fm 0.6945464815509216

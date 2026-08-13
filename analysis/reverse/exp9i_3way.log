@@ -1,0 +1,41 @@
+sra fold 0 A=0.7007 it~790
+sra fold 1 A=0.6824 it~401
+sra fold 2 A=0.6954 it~753
+sra fold 3 A=0.6600 it~342
+sra fold 4 A=0.6972 it~677
+=== sra === {
+  "name": "sra",
+  "A": 0.6873015152709344,
+  "extra": [
+    "src_reg_age"
+  ],
+  "dt": 155.3473334312439,
+  "n_folds": 5,
+  "n_bag": 1,
+  "n_seed": 1,
+  "max2": 0.6873015152709344
+}
+blends 0.6941024410088856 0.6956771329669551
+sra_low fold 0 A=0.6980 it~796
+sra_low fold 1 A=0.6802 it~370
+sra_low fold 2 A=0.6967 it~725
+sra_low fold 3 A=0.6619 it~427
+sra_low fold 4 A=0.7032 it~778
+=== sra_low === {
+  "name": "sra_low",
+  "A": 0.6879732236188966,
+  "extra": [
+    "src_reg_age",
+    "src_gr_age",
+    "reg_gr_age",
+    "src_reg_gr",
+    "t3_letter"
+  ],
+  "dt": 186.60809779167175,
+  "n_folds": 5,
+  "n_bag": 1,
+  "n_seed": 1,
+  "max2": 0.6879732236188966
+}
+blends 0.6952173688916063 0.695777295854799
+winner 5-fold sra_low 0.6879732236188966
