@@ -43,7 +43,9 @@ def rank01(a: np.ndarray) -> np.ndarray:
 
 
 def skf(y, n=N_FOLDS, seed=SEED):
-    return StratifiedKFold(n_splits=n, shuffle=True, random_state=seed)
+    cv = StratifiedKFold(n_splits=n, shuffle=True, random_state=seed)
+    dummy = np.zeros(len(y))
+    return cv.split(dummy, y)
 
 
 def fill_condition(trn: pd.DataFrame, *others: pd.DataFrame):
