@@ -133,6 +133,11 @@ NUM_ALT_W62 = [
     "x20",
     "x1",
     "x5",
+    "v_r",
+    "cc_r",
+    "maxg_r",
+    "x14_r",
+    "x17_r",
     "age8",
     "cond_low",
     "safe_750",
@@ -223,19 +228,35 @@ def _rank_apply(tr_src: np.ndarray, tr_v: np.ndarray, va_src: np.ndarray, va_v: 
     return out
 
 
-def fold_features(trn: pd.DataFrame, val: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    trn = enrich(trn)
-    val = enrich(val)
+def fold_features(
+    trn: pd.DataFrame,
+    val: pd.DataFrame,
+    tes: pd.DataFrame | None = None,
+    cats: list[str] | None = None,
+    nums_main: list[str] | None = None,
+    nums_alt: list[str] | None = None,
+):
+    """Fold-safe features. Median/rank/qcut fit on `trn` only.
+
+    Optional `tes` is transformed with the same train-fold stats.
+    `cats` / `nums_*` are accepted for callers; the full feature set is always built.
+    """
+    _ = (cats, nums_main, nums_alt)
+    trn = enrich(trn).copy()
+    val = enrich(val).copy()
+    frames: list[pd.DataFrame] = [trn, val]
+    if tes is not None:
+        tes = enrich(tes).copy()
+        frames.append(tes)
+
     med = trn.groupby("source")["condition"].median()
     g = float(trn["condition"].median())
 
     def fill_cond(df: pd.DataFrame) -> pd.Series:
         return df["condition"].fillna(df["source"].map(med)).fillna(g)
 
-    trn = trn.copy()
-    val = val.copy()
-    trn["condition_f"] = fill_cond(trn)
-    val["condition_f"] = fill_cond(val)
+    for df in frames:
+        df["condition_f"] = fill_cond(df)
     sm = trn.groupby("source")["condition_f"].median()
     sm_med = float(sm.median()) if len(sm) else 1.0
 
@@ -243,17 +264,17 @@ def fold_features(trn: pd.DataFrame, val: pd.DataFrame) -> tuple[pd.DataFrame, p
         den = df["source"].map(sm).replace(0, np.nan).fillna(sm_med)
         return df["condition_f"] / den
 
-    trn["cond_r"] = cond_r(trn)
-    val["cond_r"] = cond_r(val)
+    for df in frames:
+        df["cond_r"] = cond_r(df)
     trn["cond_rk"] = trn.groupby("source")["condition_f"].rank(pct=True)
-    val["cond_rk"] = _rank_apply(
-        trn["source"].to_numpy(),
-        trn["condition_f"].to_numpy(),
-        val["source"].to_numpy(),
-        val["condition_f"].to_numpy(),
-    )
+    src_tr = trn["source"].to_numpy()
+    cf_tr = trn["condition_f"].to_numpy()
+    for df in frames[1:]:
+        df["cond_rk"] = _rank_apply(
+            src_tr, cf_tr, df["source"].to_numpy(), df["condition_f"].to_numpy()
+        )
 
-    for df in (trn, val):
+    for df in frames:
         df["ratio"] = df["days"] / df["cond_r"]
         df["rate"] = df["days"] * (1.0 - df["cond_rk"])
         df["ratio_sqrt"] = df["days"] / np.sqrt(df["condition_f"].clip(lower=1e-6))
@@ -284,15 +305,20 @@ def fold_features(trn: pd.DataFrame, val: pd.DataFrame) -> tuple[pd.DataFrame, p
         df["mono_car1"] = (1.0 - df["cond_rk"]) * (car == "CAR_1").astype(np.int8)
         df["rev_car7"] = df["cond_rk"] * (car == "CAR_7").astype(np.int8)
 
-    trn["days_q"], val["days_q"] = _qcut_apply(trn["days"], val["days"], q=10)
-    trn["days_q5"], val["days_q5"] = _qcut_apply(trn["days"], val["days"], q=5)
-    trn["cond_q"], val["cond_q"] = _qcut_apply(trn["condition_f"], val["condition_f"], q=10)
-    trn["ratio_q"], val["ratio_q"] = _qcut_apply(trn["ratio"], val["ratio"], q=10)
-    trn["rate_q"], val["rate_q"] = _qcut_apply(trn["rate"], val["rate"], q=10)
-    trn["cond_q10"] = trn["cond_q"]
-    val["cond_q10"] = val["cond_q"]
+    def _qcut_all(name: str, col: str, q: int) -> None:
+        trn[name], val[name] = _qcut_apply(trn[col], val[col], q=q)
+        if tes is not None:
+            _, tes[name] = _qcut_apply(trn[col], tes[col], q=q)
 
-    for df in (trn, val):
+    _qcut_all("days_q", "days", 10)
+    _qcut_all("days_q5", "days", 5)
+    _qcut_all("cond_q", "condition_f", 10)
+    _qcut_all("ratio_q", "ratio", 10)
+    _qcut_all("rate_q", "rate", 10)
+    for df in frames:
+        df["cond_q10"] = df["cond_q"]
+
+    for df in frames:
         df["source"] = df["source"].astype(str)
         df["region"] = df["region"].astype(str)
         df["age_range"] = df["age_range"].astype(int).astype(str)
@@ -311,7 +337,9 @@ def fold_features(trn: pd.DataFrame, val: pd.DataFrame) -> tuple[pd.DataFrame, p
         df["src_ratioq"] = df["source"] + "|" + df["ratio_q"]
         df["src_cq_dq"] = df["source"] + "|" + df["cond_q"] + "|" + df["days_q"]
         df["src_cq_dq5"] = df["source"] + "|" + df["cond_q"] + "|" + df["days_q5"]
-    return trn, val
+    if tes is None:
+        return trn, val
+    return trn, val, tes
 
 
 def te_apply(tr_keys: np.ndarray, va_keys: np.ndarray, ytr: np.ndarray, m: float = 20.0) -> np.ndarray:
