@@ -212,6 +212,7 @@ clone 后本地：`data/train.csv`（14930×45，正例率 0.1002）、`data/tes
 
 - HONEST RUN4：8seed × 2bag × 10fold × 800 RMSE，无 inner ES → **auc_cb_w62=0.68863**。再加 seed 几乎不涨。未达 0.700。
 - 产物：`submissions/cb_w62_{oof,test}.parquet`、`cb_w62_metrics.json`、`cb_oof_report.txt`。
-- 选包：按诚实 AUC，继续用 teacher max2 + 硬门提交（0.69353）。禁止用这份 w62 覆盖 teacher。
-- VAL_ES 对照上限 0.69713（OOF 折 ES + LGB），不能当 HONEST 上报。
-- 80 交叉 / 3-way / Lossguide / 更深 Plain / 分车型 CB：均未超过该对照。下一步仍需 **≥8 核** 上的 HONEST 8seed×3bag，或对齐历史 FeatureBuilder 的中基数交叉，而不是再堆 1 核 2bag。
+- 选包：按诚实 AUC，继续用 teacher max2。
+- VAL_ES 对照上限 0.69713（OOF 折 ES + LGB），不能当 HONEST 上报。叠旧硬门本地 0.69849，但没有 test 预测，未提交。
+- exp10 精算残差：`days` 按 365 天周年聚类。6 年窗 [2110,2210) 嵌套 10/10 抬分。当前提交 = teacher max2 + 四窗硬门 **0.69431**。
+- 80 交叉 / 3-way / Lossguide / 更深 Plain / 分车型 iso：均未超过对照。下一步仍需 **≥8 核** 上的 HONEST 8seed×3bag，或对齐历史 FeatureBuilder 的中基数交叉。
