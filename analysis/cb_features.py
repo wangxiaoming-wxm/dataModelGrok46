@@ -109,6 +109,11 @@ NUM_MAIN_W62 = [
     "x14_r",
     "x17_r",
     "pow_rate15",
+    "pow_ratio_s",
+    "ushape_car10",
+    "mono_car1",
+    "rev_car7",
+    "days_sqrt",
     "age8",
     "cond_low",
     "safe_750",
@@ -122,11 +127,16 @@ NUM_MAIN_W62 = [
 NUM_ALT_W62 = [
     "days",
     "days_log",
+    "days_sqrt",
     "condition_f",
     "cond_rk",
     "rate",
     "pow_rate15",
+    "pow_ratio_s",
     "u_shape",
+    "ushape_car10",
+    "mono_car1",
+    "rev_car7",
     "age_num",
     "V",
     "cc",
@@ -281,6 +291,7 @@ def fold_features(
         df["u_shape"] = (df["cond_rk"] - 0.5) ** 2
         df["inv_cond"] = 1.0 / df["condition_f"].clip(lower=1e-4)
         df["days_log"] = np.log1p(df["days"])
+        df["days_sqrt"] = np.sqrt(df["days"].clip(lower=0.0))
         df["age_num"] = pd.to_numeric(df["age_range"], errors="coerce").fillna(0.0)
         df["age8"] = (df["age_num"] >= 8).astype(np.int8)
         df["cond_low"] = (df["condition_f"] < 0.05).astype(np.int8)
