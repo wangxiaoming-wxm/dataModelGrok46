@@ -91,12 +91,14 @@ def per_source_rank(src, cond, ref_src, ref_cond) -> np.ndarray:
 
 
 def qcut_apply(tr, va, q=10):
+    tr = pd.Series(np.asarray(tr, dtype=float))
+    va = pd.Series(np.asarray(va, dtype=float))
     cats, bins = pd.qcut(tr, q, duplicates="drop", retbins=True, labels=False)
     bins = bins.copy()
     bins[0], bins[-1] = -np.inf, np.inf
     va_b = pd.cut(va, bins=bins, labels=False, include_lowest=True)
     va_b = pd.Series(va_b).fillna(0).astype(int).to_numpy()
-    return cats.astype(int).to_numpy(), va_b, bins
+    return np.asarray(cats, dtype=int), va_b, bins
 
 
 def te_stats(keys, y, m=20.0, prior=None):
