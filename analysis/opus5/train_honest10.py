@@ -75,8 +75,10 @@ def nested_auc(oof: np.ndarray, y: np.ndarray, n_blocks: int = 5) -> float:
     return float(roc_auc_score(y, out))
 
 
-def seed_path(arm: str, seed: int) -> Path:
-    return CKPT / f"{arm}_f{N_FOLD}_s{seed}.npz"
+def seed_path(arm: str, seed: int, bag: int = 0) -> Path:
+    if bag <= 0:
+        return CKPT / f"{arm}_f{N_FOLD}_s{seed}.npz"
+    return CKPT / f"{arm}_f{N_FOLD}_s{seed}_b{bag}.npz"
 
 
 def load_xy() -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray]:
@@ -86,22 +88,23 @@ def load_xy() -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray]:
     return train, test, y
 
 
-def fit_one_seed(arm: str, seed: int, train: pd.DataFrame, test: pd.DataFrame, y: np.ndarray) -> dict:
-    out_p = seed_path(arm, seed)
+def fit_one_seed(arm: str, seed: int, train: pd.DataFrame, test: pd.DataFrame, y: np.ndarray, bag: int = 0) -> dict:
+    out_p = seed_path(arm, seed, bag)
     if out_p.is_file():
         z = np.load(out_p)
         rec = {
             "arm": arm,
             "seed": seed,
+            "bag": bag,
             "auc": float(z["auc"]),
             "elapsed_s": float(z["elapsed_s"]) if "elapsed_s" in z.files else 0.0,
             "skipped": True,
         }
-        print(f"[{arm} s{seed}] skip existing OOF={rec['auc']:.6f}", flush=True)
+        print(f"[{arm} s{seed} b{bag}] skip existing OOF={rec['auc']:.6f}", flush=True)
         return rec
 
     raw_all = pd.concat([train.drop(columns=["label"]), test], ignore_index=True)
-    stream = ALL_SEEDS.index(seed) + 1
+    stream = ALL_SEEDS.index(seed) + 1 + 20 * bag
     t0 = time.time()
     if arm == "main":
         edges = fit_edges(raw_all)
@@ -135,12 +138,12 @@ def fit_one_seed(arm: str, seed: int, train: pd.DataFrame, test: pd.DataFrame, y
     skf = StratifiedKFold(N_FOLD, shuffle=True, random_state=seed)
     for fold, (ti, vi) in enumerate(skf.split(Xtr, y)):
         ft = time.time()
-        model = CatBoostClassifier(**params, random_seed=seed + fold)
+        model = CatBoostClassifier(**params, random_seed=seed + fold + 1000 * bag)
         model.fit(Xtr.iloc[ti], y[ti], cat_features=cats, verbose=False)
         oof[vi] = model.predict_proba(Xtr.iloc[vi])[:, 1]
         te += model.predict_proba(Xte)[:, 1] / float(N_FOLD)
         print(
-            f"  [{arm} s{seed} f{fold}] {time.time() - ft:.0f}s  "
+            f"  [{arm} s{seed} b{bag} f{fold}] {time.time() - ft:.0f}s  "
             f"fold_rows={len(vi)}",
             flush=True,
         )
@@ -153,14 +156,15 @@ def fit_one_seed(arm: str, seed: int, train: pd.DataFrame, test: pd.DataFrame, y
         test_pred=te,
         auc=auc,
         seed=seed,
+        bag=bag,
         arm=arm,
         elapsed_s=elapsed,
         y=y,
         n_fold=N_FOLD,
         iters=ITERS,
     )
-    print(f"[{arm} s{seed}] OOF={auc:.6f} ({elapsed:.0f}s) -> {out_p.name}", flush=True)
-    return {"arm": arm, "seed": seed, "auc": auc, "elapsed_s": elapsed, "skipped": False}
+    print(f"[{arm} s{seed} b{bag}] OOF={auc:.6f} ({elapsed:.0f}s) -> {out_p.name}", flush=True)
+    return {"arm": arm, "seed": seed, "bag": bag, "auc": auc, "elapsed_s": elapsed, "skipped": False}
 
 
 def pool_arm(arm: str, y: np.ndarray) -> dict | None:
@@ -258,16 +262,16 @@ def write_report(y: np.ndarray) -> dict:
     return report
 
 
-def run(seeds: list[int], arms: list[str]) -> None:
+def run(seeds: list[int], arms: list[str], bag: int = 0) -> None:
     train, test, y = load_xy()
     print(
         f"[honest10] n={len(y)} pos={int(y.sum())} folds={N_FOLD} "
-        f"seeds={seeds} arms={arms} threads={THREADS}",
+        f"seeds={seeds} arms={arms} bag={bag} threads={THREADS}",
         flush=True,
     )
     for seed in seeds:
         for arm in arms:
-            fit_one_seed(arm, seed, train, test, y)
+            fit_one_seed(arm, seed, train, test, y, bag=bag)
         write_report(y)
 
 
@@ -277,11 +281,12 @@ def main() -> int:
     p.add_argument("--report", action="store_true", help="pool existing checkpoints only")
     p.add_argument("--seeds", default=",".join(str(s) for s in ALL_SEEDS))
     p.add_argument("--arms", default="main,alt")
+    p.add_argument("--bag", type=int, default=0, help="bag index; 0 keeps original filenames")
     args = p.parse_args()
     seeds = [int(x) for x in args.seeds.split(",") if x.strip()]
     arms = [x.strip() for x in args.arms.split(",") if x.strip()]
     if args.run:
-        run(seeds, arms)
+        run(seeds, arms, bag=args.bag)
         return 0
     train, test, y = load_xy()
     write_report(y)

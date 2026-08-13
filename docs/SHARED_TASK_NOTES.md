@@ -1,6 +1,6 @@
 # 共享任务笔记（主会话与子 agent 必读）
 
-更新时间: 2026-08-13（最强可提交：honest10 10折×8seed max2 + 四窗硬门，ungated **0.70258** / gated **0.70493**，已过 W62 0.70159；见 `analysis/FINAL_BEST.md`）
+更新时间: 2026-08-13（最强可提交：gauss(0.70 honest10 + 0.30 ref) + 硬门，gated **0.70742**；底座为线上 0.71629 的 W62⊕ref30。见 `analysis/FINAL_BEST.md`）
 
 ## 目标
 

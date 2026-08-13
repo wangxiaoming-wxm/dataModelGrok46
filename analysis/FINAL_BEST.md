@@ -1,21 +1,22 @@
 # 当前最强可提交方案
 
-更新：2026-08-13。评测 AUC。必须 Spark ML + Scala 可消费（CatBoost parquet join + `InsurerGate`）。
+更新：2026-08-13。评测 AUC。必须 Spark ML + Scala 可消费。
 
 ## 当前提交（可交）
 
-`submissions/submission.csv`（备份 `submission_gauss_opus.csv`、`submission_before_honest10.csv`）
+`submissions/submission.csv`（备份 `submission_honest10_gated.csv`）
 
-- 主臂：**honest10** HONEST 10 折 × 8 seed max2（opus5 FE，Classifier Logloss，固定 800 树，无早停）
-  - ungated **0.70258** / nested **0.70231**（超过历史 W62 OOF **0.70159**）
-  - main pool 0.69784，alt pool 0.69875
-- 冻结四窗硬门后再 rank01
-- 本地 **gated OOF 0.70493**
-- 对照：旧 gauss(0.80 opus5-5fold + 0.15 LGB + 0.05 VAL-ES) gated 0.70456；纯 5 折 opus+硬门 0.70274
+线上已验证底座：`best_0.716` = W62⊕ref30 = **0.71629**。
+本交在冻结 `w_ref=0.30` 下把 W62 换成更强的 honest10，再套 gauss + 四窗硬门：
 
-口径：honest10 为 **HONEST_NO_ES 10fold×8seed**。未混 LGB/VAL-ES。0.706 zip 本地 OOF 仅 0.694，不采用。
+`gauss(0.70·honest10 + 0.30·ref) + gate`
 
-参考：`analysis/opus5/HONEST10_NOTES.md`。
+- honest10：HONEST 10 折×8 seed Classifier max2，ungated 0.70258
+- ref：0.716 包的映射臂（旧官方切分，灰区），权重不重搜
+- 本地 **ungated 0.70512 / nested 0.70483 / gated 0.70742**
+- vs 上一交 honest10+gate：bootstrap Δ=+0.00244，CI [+0.00008,+0.00470]
+
+参考：`analysis/best716/NOTES.md`。
 
 ## 配方要点
 
