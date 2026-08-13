@@ -2,13 +2,14 @@
 """Assemble the strongest currently-available submission without retraining.
 
 Reads (all optional except teacher parquet + test.csv):
+  analysis/opus5/artifacts/{merger_ord8,v2_cat_alt8}.npz  # HONEST 8-seed max2 0.69993
   submissions/cb_teacher_{oof,test}.parquet
   analysis/final_ckpt/lgb_oof_test.npz
   analysis/final_ckpt/vales_seed*_bags*.npz  (averaged=1 only)
-  submissions/final_best_{oof,test}.parquet
 
-Picks the max gated OOF among a frozen candidate list, writes
-submissions/submission.csv. Safe to rerun while final_best.py is training.
+Picks the max gated OOF among a frozen SAFE candidate list.
+Never element-wise max() two OOF vectors from different CV protocols
+(that cherry-picks fold luck). Safe to rerun while final_best.py is training.
 """
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ from insurer_gate import apply_gate  # noqa: E402
 
 SUB = ROOT / "submissions"
 CKPT = ROOT / "analysis" / "final_ckpt"
+OPUS = ROOT / "analysis" / "opus5" / "artifacts"
 
 
 def rank01(a: np.ndarray) -> np.ndarray:
@@ -49,6 +51,30 @@ def pick_cb_fuse(oof_m: np.ndarray, oof_a: np.ndarray, y: np.ndarray) -> tuple[n
 def apply_cb_fuse(te_m: np.ndarray, te_a: np.ndarray, tag: str) -> np.ndarray:
     r_m, r_a = rank01(te_m), rank01(te_a)
     return np.maximum(r_m, r_a) if tag == "max2" else 0.62 * r_m + 0.38 * r_a
+
+
+def nested_auc(oof: np.ndarray, y: np.ndarray, n_blocks: int = 5) -> float:
+    """Opus5 anti-optimistic metric: re-rank within contiguous index blocks."""
+    n = len(y)
+    out = np.zeros(n)
+    for b in np.array_split(np.arange(n), n_blocks):
+        out[b] = pd.Series(oof[b]).rank(method="average", pct=True).to_numpy(np.float64)
+    return auc(y, out)
+
+
+def load_opus5() -> tuple[np.ndarray, np.ndarray, dict] | None:
+    mo_p, ca_p = OPUS / "merger_ord8.npz", OPUS / "v2_cat_alt8.npz"
+    if not (mo_p.is_file() and ca_p.is_file()):
+        return None
+    mo, ca = np.load(mo_p, allow_pickle=True), np.load(ca_p, allow_pickle=True)
+    mo_oof, mo_te = rank01(np.asarray(mo["oof"], dtype=np.float64)), rank01(np.asarray(mo["test_pred"], dtype=np.float64))
+    ca_oof, ca_te = rank01(np.asarray(ca["oof"], dtype=np.float64)), rank01(np.asarray(ca["test_pred"], dtype=np.float64))
+    oof, tes = np.maximum(mo_oof, ca_oof), np.maximum(mo_te, ca_te)
+    meta = {
+        "merger_auc": float(auc(np.asarray(mo["y"], dtype=np.float64), mo_oof)) if "y" in mo.files else None,
+        "alt_auc": float(auc(np.asarray(ca["y"], dtype=np.float64), ca_oof)) if "y" in ca.files else None,
+    }
+    return oof, tes, meta
 
 
 def load_vales() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[int]] | None:
@@ -114,6 +140,12 @@ def main() -> None:
         cb_oof, cb_tag, cb_auc = pick_cb_fuse(oof_m, oof_a, y)
         cb_te = apply_cb_fuse(te_m, te_a, cb_tag)
 
+    opus = load_opus5()
+    opus_oof = opus_te = None
+    opus_meta: dict = {}
+    if opus is not None:
+        opus_oof, opus_te, opus_meta = opus
+
     cands: list[tuple[str, np.ndarray, np.ndarray]] = [
         (f"teacher_{tea_tag}", tea_s, tea_t),
     ]
@@ -129,26 +161,37 @@ def main() -> None:
         r_tea, r_teat = rank01(tea_s), rank01(tea_t)
         cands += [
             (f"vales_{cb_tag}", cb_oof, cb_te),
-            ("max(vales,teacher)", np.maximum(r_cb, r_tea), np.maximum(r_cbt, r_teat)),
             ("0.70vales+0.30teacher", 0.70 * r_cb + 0.30 * r_tea, 0.70 * r_cbt + 0.30 * r_teat),
         ]
         if lgb_oof is not None:
             cands += [
                 ("0.80vales+0.20lgb", 0.80 * r_cb + 0.20 * lgb_oof, 0.80 * r_cbt + 0.20 * lgb_te),
                 ("0.85vales+0.15lgb", 0.85 * r_cb + 0.15 * lgb_oof, 0.85 * r_cbt + 0.15 * lgb_te),
-                (
-                    "0.64vales+0.16teacher+0.20lgb",
-                    0.64 * r_cb + 0.16 * r_tea + 0.20 * lgb_oof,
-                    0.64 * r_cbt + 0.16 * r_teat + 0.20 * lgb_te,
-                ),
             ]
+    if opus_oof is not None:
+        r_op, r_opt = rank01(opus_oof), rank01(opus_te)
+        cands += [
+            ("opus_max2", opus_oof, opus_te),
+        ]
+        if lgb_oof is not None:
+            cands += [
+                ("0.90opus+0.10lgb", 0.90 * r_op + 0.10 * lgb_oof, 0.90 * r_opt + 0.10 * lgb_te),
+                ("0.85opus+0.15lgb", 0.85 * r_op + 0.15 * lgb_oof, 0.85 * r_opt + 0.15 * lgb_te),
+                ("0.80opus+0.20lgb", 0.80 * r_op + 0.20 * lgb_oof, 0.80 * r_opt + 0.20 * lgb_te),
+            ]
+        # Rank-weighted mix with other CB packs is OK; element-wise max across
+        # different CV protocols is not (cherry-picks fold luck).
+        if cb_oof is not None:
+            cands.append(("0.90opus+0.10vales", 0.90 * r_op + 0.10 * rank01(cb_oof), 0.90 * r_opt + 0.10 * rank01(cb_te)))
+        cands.append(("0.90opus+0.10teacher", 0.90 * r_op + 0.10 * rank01(tea_s), 0.90 * r_opt + 0.10 * rank01(tea_t)))
 
     scored = []
     for name, oof, tes in cands:
         g = auc(y, rank01(apply_gate(oof, days_tr)))
-        scored.append((g, name, oof, tes))
-        print(f"  {name:32s} gated={g:.6f}", flush=True)
-    best_g, best_name, best_oof, best_te = max(scored, key=lambda t: t[0])
+        n = nested_auc(rank01(oof), y)
+        scored.append((g, name, oof, tes, n))
+        print(f"  {name:32s} gated={g:.6f} nested={n:.6f} ungated={auc(y, oof):.6f}", flush=True)
+    best_g, best_name, best_oof, best_te, best_n = max(scored, key=lambda t: t[0])
     gated_te = rank01(apply_gate(best_te, days_te))
     order = pd.read_csv(ROOT / "data" / "test.csv", usecols=["id"])
     order["id"] = order["id"].astype(str)
@@ -157,9 +200,12 @@ def main() -> None:
     out.to_csv(SUB / "submission.csv", index=False)
 
     report = {
-        "recipe": "assemble_best: rank-fuse available arms + frozen 4-window gate",
+        "recipe": "opus5 HONEST 8-seed max2 (Classifier Logloss, no ES) + frozen 4-window gate",
         "selected": best_name,
         "auc_gated": best_g,
+        "auc_nested": best_n,
+        "opus_merger_auc": opus_meta.get("merger_auc"),
+        "opus_alt_auc": opus_meta.get("alt_auc"),
         "teacher_tag": tea_tag,
         "teacher_ungated": tea_auc,
         "lgb_ungated": lgb_auc,
@@ -168,7 +214,7 @@ def main() -> None:
         "vales_seeds": seeds,
         "n_test": int(len(out)),
         "gate": "floor[1725,1825)+[2110,2210) -0.10[700,880) +0.05[9370,9475)",
-        "honest_note": "VAL-ES OOF is slightly optimistic vs no-ES; gate magnitudes frozen",
+        "honest_note": "opus5 is HONEST_NO_ES 5fold x 8seed; VAL-ES mixes are slightly optimistic; no cross-protocol elementwise max",
         "status": "assembled",
     }
     (SUB / "final_best_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -209,7 +255,10 @@ def main() -> None:
             "pred_lgb": lgb_te if lgb_te is not None else fuse_te,
         }
     ).to_parquet(SUB / "final_best_test.parquet", index=False)
-    print(f"wrote {SUB / 'submission.csv'} selected={best_name} gated={best_g:.6f} n={len(out)}", flush=True)
+    print(
+        f"wrote {SUB / 'submission.csv'} selected={best_name} gated={best_g:.6f} nested={best_n:.6f} n={len(out)}",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

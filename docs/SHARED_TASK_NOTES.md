@@ -1,6 +1,6 @@
 # 共享任务笔记（主会话与子 agent 必读）
 
-更新时间: 2026-08-13（最强可提交：VAL-ES seed2026 ⊕ teacher ⊕ LGB + 四窗硬门，gated OOF **0.69826**；见 `analysis/FINAL_BEST.md`）
+更新时间: 2026-08-13（最强可提交：opus5 HONEST max2 ×0.85 + LGB×0.15 + 四窗硬门，gated OOF **0.70335**；见 `analysis/FINAL_BEST.md`）
 
 ## 目标
 

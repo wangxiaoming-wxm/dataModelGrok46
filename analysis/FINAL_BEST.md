@@ -2,50 +2,59 @@
 
 更新：2026-08-13。评测 AUC。必须 Spark ML + Scala 可消费（CatBoost parquet join + `InsurerGate`）。
 
-## 配方（按诚实证据锁定）
+## 当前提交（可交）
 
-1. **主臂**：CatBoost 双世界 RMSE（禁止 Logloss）
-   - Ordered d5 l2=10 + Plain d6 l2=6 rsm=0.3
-   - 10 折 × 3 bag × 多种子；VAL-ES（early stopping 打在 OOF 验证折）
-   - 23 列中基数类别 `CATS_BEST`，**禁止** `src|cond_q|days_q`
-2. **多样性臂**：LightGBM 双世界 RMSE，同一 10 折，外折 ES
-3. **Teacher 对照**：已有 10fold×3bag×1seed inner-ES parquet（ungated max2 **0.69207**）
-4. **Rank 融合**：在冻结候选里按 **硬门后 OOF** 选包，不允许“文件名带 w62 就用”
-5. **保司硬门**（rank 融合之后，幅度冻结）：
+`submissions/submission.csv`（备份 `submission_opus5_gated.csv`）
+
+- 主臂：**opus5 HONEST** 8-seed max2
+  - `merger_ord8`：v2 主帧 + Ordered Classifier Logloss，depth=5，固定 800 树，5 折 × 8 seed
+  - `v2_cat_alt8`：alt 世界 `rate=days*(1-rank(condition|source))`，Plain d6 l2=6
+  - 逐元素 max(rank) 融合，nested OOF **0.69993** / full **0.70023**
+- 多样性臂：本仓库 LightGBM RMSE 10 折，权重 **0.15**
+- 冻结四窗保司硬门后再 rank01
+- 本地 **gated OOF 0.70335**（nested 0.70056）
+- 纯 opus_max2 + 硬门：gated **0.70274**（nested 0.69993）
+
+口径：opus5 为 **HONEST_NO_ES**（无早停）。LGB 外折 ES 仅 15% 权重。禁止把 VAL-ES 数字写成 HONEST。
+
+参考包：`analysis/opus5/`（20260810-curos-opus5）。
+
+## 配方要点
+
+1. **Honest CatBoostClassifier + Logloss 在这套 FE 上有效**（固定 800 树、无 `use_best_model`）。
+   此前「Logloss→AUC 0.51」指的是 **Regressor + Logloss**，不要和 Classifier 混为一谈。
+2. 双世界仍然成立：`cond_r` / `ratio` vs `rate=days*(1-rank(condition|source))`。
+3. opus5 FE：train+test 一次性拟合分位切点（label-free 转导）；jitter 用 id 哈希当 RNG，不当特征列。
+4. **禁止** 对不同 CV 协议的 OOF 做逐元素 max（会捡折内运气，虚高到 0.707）。
+5. 保司硬门（rank 融合之后，幅度冻结）：
    - `[1725,1825)`、`[2110,2210)` 全体最低
    - `[700,880)` 秩 −0.10
    - `[9370,9475)` 秩 +0.05
-   - 再 `rank01` → `submissions/submission.csv`
 
 ## 入口
 
 ```bash
-# 训练（可断点续跑 analysis/final_ckpt/）
-FINAL_SEEDS=2026,2036,2046,2056 FINAL_BAGS=3 FINAL_THREADS=1 \
-  python3 -u analysis/final_best.py | tee analysis/final_best.log
-
-# 只组装当前已有 OOF/test（训练中也可跑）
 python3 -u analysis/assemble_best.py
+# 完整重训 opus5 约 150 min（1 核更长），数据路径已改 /workspace/data
+# bash analysis/opus5/reproduce.sh
 ```
 
-Spark：`claim.BlendApp` / `CatBoostArm.joinTeacher` 读 `submissions/final_best_*.parquet`（`pred_fuse`），再跑 `InsurerGate`。
+Spark：`BlendApp` / `CatBoostArm` 读 `submissions/final_best_*.parquet` 的 `pred_fuse`，再 `InsurerGate`。
 
-## 记账口径
+`final_best.py` 的 VAL-ES 4seed 仍可续跑作对照，**结束后必须再跑 assemble_best.py**，避免弱包覆盖 0.703 提交。
 
-| 协议 | 含义 | 不可冒充 |
-|---|---|---|
-| HONEST_NO_ES | 训练折全量 800 iter | 历史 W62 0.70159 / 线上 0.71503；本机 8seed×2bag 仅 0.68863 |
-| VAL_ES | ES 打在 OOF 折 | 略乐观；可提交，但报告里必须写 VAL_ES |
-| inner 12% ES | teacher 3-bag | ungated 0.69207 |
+## 记账
 
-`best_oof.npy` 的 VAL_ES 融合 **0.69713**（硬门后约 0.699）**没有 test 预测**，不能直接交。
+| 包 | 协议 | ungated | gated |
+|---|---|---:|---:|
+| opus5 max2 8seed | HONEST 5fold | 0.70023 | **0.70274** |
+| 0.85 opus + 0.15 LGB | HONEST + 外折 ES | 0.70084 | **0.70335** |
+| VAL-ES seed2026 ⊕ LGB | VAL_ES | ~0.696 | 0.69816 |
+| teacher max2 + 硬门 | inner ES | 0.69207 | 0.69431 |
+| HONEST 本机 8seed×2bag W62 RMSE | HONEST | 0.68863 | — |
 
-## 当前提交（可交）
+距第 3 名 0.72384 仍约 0.020。
 
-`submissions/submission.csv`：VAL-ES seed 2026 max2 ⊕ teacher ⊕ LGB，硬门后 OOF **0.69826**。
+## 禁止再做
 
-选包 `0.64 vales + 0.16 teacher + 0.20 LGB`（预注册 0.80 CB + 0.20 LGB，CB 内部再 80/20 混 teacher）。近邻 `0.80vales+0.20lgb` 为 **0.69816**。
-
-口径 **VAL_ES**（略乐观），不是 HONEST_NO_ES。4seed 仍在训，完成后若 gated 更高会覆盖。
-
-id / 字节 TE / 伪标签；高基数 TE 喂树；同一折先全量 OOF-TE；丢弃 x18/x19 之外再搜硬门平移；1 核上重跑 8seed×3bag HONEST。
+id 当模型特征 / 字节 TE / 伪标签；高基数 TE 喂树；同一折先全量 OOF-TE；再搜硬门平移；跨协议 OOF 逐元素 max；1 核重跑 8seed×3bag RMSE HONEST（已被 opus5 Classifier 包超过）。
