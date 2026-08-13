@@ -486,6 +486,13 @@ def main():
         },
         "beats_portable_0.66": bool(portable_best > 0.66),
         "portable_best": float(portable_best),
+        "conclusions": {
+            "two_stage_vs_0.66": "p_cover*p_freq and table8×cover stay below the ~0.66 linear/table ceiling. Closed 0.6705 already above; ×cover does not help.",
+            "scan_bins": "Passing scan bins are discovery notes. Do not enter p_cover. +[0,80) is sensitivity only.",
+            "claim_util": "Rank-fusion arm only. Do not feed trees.",
+            "teacher_residual": "Spearman ≥0.70. Nested w≤0.08 is noise. Do not fuse into teacher.",
+            "frozen_gate": "Apply-only. Do not re-search shifts.",
+        },
         "note": (
             "First draft stuffed ~40 overlapping scan bins into p_cover (invalid). "
             "This file uses only the 3 pre-registered windows that passed two-half. "

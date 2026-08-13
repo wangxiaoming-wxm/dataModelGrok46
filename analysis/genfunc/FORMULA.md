@@ -187,5 +187,51 @@ CAR_1 / CAR_10 对 condition 敏感（\(b\) 大）；CAR_5/7/9 几乎只看 days
 | `exp4_grid_closed.json` | 幂次网格，AUC>0.62 的 24 组 |
 | `exp5_fuse.json` | 首轮融合（含失败的 joint） |
 | `exp6_push.json` | 0.682 栈与闭合 0.670 |
+| `exp7_adversarial.json` | 两段式 \(p_{\mathrm{cover}}p_{\mathrm{freq}}\) + `claim_util` 秩臂 |
 | `portable_score.json` | 便携打分器复测 |
 | `portable_params_compact.json` | 结点 / \(b_s\) / 权重（Spark） |
+
+---
+
+## 6. 客户 vs 保司（exp7，诚实 10 折）
+
+**不要**把对抗 Ridge / 两段式 / `claim_util` 融进 teacher。两段式 vs max2 Spearman **0.855**（freq 0.863，util 0.713）。折内选权 \(w\le 0.08\) 均值 0.028，嵌套 OOF 0.69234 vs max2 **0.69207**（噪声）。全量 OOF 网格（**不是成绩**）：任何 \(w>0\) 都掉分。
+
+保司硬门已冻结，**不再搜平移**。rank 融合之后：`[1725,1825)` → 全局最小−1，`[700,880)` 秩−0.10，`[9370,9475)` 秩+0.05。Teacher max2 0.69207 → 门后 **0.69353**（只应用，不调参）。
+
+窗口进 \(p_{\mathrm{cover}}\) 必须 discovery/confirm 两半同向。预注册 5 窗里只有 3 个通过：
+
+| 窗口 | 两半率 | 方向 | 折内均 \(\alpha\) |
+|---|---|---|---:|
+| `[700,880)` | 3.42% / 2.71% | low | 0.297 |
+| `[1725,1825)` | 0% / 0% | low | 0.079 |
+| `[9370,9475)` | 16.9% / 21.0% | high | 1.768 |
+
+`[0,50)`、`[1950,2000)` 每半 \(n<40\)，排除。扫描出的 35 个 80 宽箱两半同向，但是同一三坑的涂抹，**不当特征**。灵敏度 `+[0,80)` 两段式 0.65729 < 三窗 0.65754。
+
+### 6.1 两段式 \(p=p_{\mathrm{cover}}\cdot p_{\mathrm{freq}}\)
+
+\(p_{\mathrm{cover}}\)：折内 \(\alpha=(\tilde r_{\mathrm{win}})/\tilde r_{\mathrm{out}}\)，低窗覆盖高窗。\(p_{\mathrm{freq}}\)：加法 Ridge（days/rank/CAR/source/region，**无窗口哑元**），\(\alpha=8\)，身份 RMSE。
+
+| 臂 | 10 折 |
+|---|---:|
+| \(p_{\mathrm{freq}}\) Ridge | 0.65533 |
+| \(p_{\mathrm{cover}}\cdot p_{\mathrm{freq}}\)（3 窗） | **0.65754** |
+| 同上 + `[0,80)` | 0.65729 |
+| 8 邻域表 × cover | 0.65890（表单独 0.65766） |
+| 样条 × cover | 0.65577（样条 0.65556） |
+| 闭合 0.6705 × cover | 0.67031（掉） |
+| rank(two, freq) | 0.65790 |
+
+**没有超过 ~0.66 便携线性上限。** 闭合 0.6705 已经靠 TE+表+样条+幂过了 0.66；再乘 cover 是重复（闭合公式里已有窗口哑元）。
+
+### 6.2 `claim_util` 只做单调秩臂
+
+\[
+\mathrm{claim\_util}=\mathrm{days}\cdot(1-r)\cdot(1-\mathbf{1}_{\mathrm{deny}}),\quad
+\mathrm{deny}=\mathbf{1}_{[700,880)}\vee\mathbf{1}_{[1725,1825)}
+\]
+
+10 折 **0.62585**（无 deny 0.62213）。与 two/freq/表/样条/闭合做 rank 融合都打不过较强的那一臂。禁止喂树。
+
+提交路径仍是 teacher + 冻结硬门（约 0.6935），不是两段式 Ridge。
