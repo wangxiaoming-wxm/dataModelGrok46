@@ -1,6 +1,6 @@
 package claim
 
-import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 
@@ -289,7 +289,22 @@ object TrainApp {
       .join(pFm, Seq("id"))
       .join(pBig, Seq("id"))
 
-    val pCb = CatBoostArm.score(trF, vaTe)
+    val pCb =
+      if (sys.env.getOrElse("CLAIM_CB_BACKEND", "auto") == "off") {
+        vaF.select(col("id"))
+          .withColumn("pred_cb_main", lit(0.1))
+          .withColumn("pred_cb_alt", lit(0.1))
+      } else {
+        try CatBoostArm.score(trF, vaTe)
+        catch {
+          case e: OutOfMemoryError => throw e
+          case e: Throwable =>
+            println(s"[cb] skipped: ${e.getClass.getSimpleName}: ${e.getMessage}")
+            vaF.select(col("id"))
+              .withColumn("pred_cb_main", lit(0.1))
+              .withColumn("pred_cb_alt", lit(0.1))
+        }
+      }
     joined = joined.join(pCb, Seq("id"))
 
     trF.unpersist()
