@@ -295,8 +295,9 @@ object TrainApp {
           .withColumn("pred_cb_main", lit(0.1))
           .withColumn("pred_cb_alt", lit(0.1))
       } else {
-        try CatBoostArm.score(trF, vaTe)
-        catch {
+        try {
+          CatBoostArm.joinTeacher(vaF).getOrElse(OrderedArm.score(trF, vaF, gbtIter))
+        } catch {
           case e: OutOfMemoryError => throw e
           case e: Throwable =>
             println(s"[cb] skipped: ${e.getClass.getSimpleName}: ${e.getMessage}")

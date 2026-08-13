@@ -3,7 +3,7 @@ package claim
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.attribute.{Attribute, AttributeGroup, NominalAttribute, NumericAttribute}
 import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler}
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 
@@ -205,8 +205,6 @@ object CatBoostArm {
       .setThreadCount(math.max(1, sys.env.getOrElse("CB_THREADS", "4").toInt))
       .setAllowWritingFiles(false)
       .setWorkerInitializationTimeout(Duration.ofSeconds(40))
-    try cb.set("loggingLevel", "Silent")
-    catch { case _: Throwable => () }
 
     cb.fit(trV).transform(apV)
   }
