@@ -228,7 +228,7 @@ def write_report(y: np.ndarray) -> dict:
             f"vs opus5-5fold {TARGET_FULL:.5f} ({full - TARGET_FULL:+.5f})",
             flush=True,
         )
-        out = ART / "honest10_report.json"
+    out = ART / "honest10_report.json"
     slim = {k: v for k, v in report.items()}
     out.write_text(json.dumps(slim, indent=2), encoding="utf-8")
     print(json.dumps(slim, indent=2), flush=True)
