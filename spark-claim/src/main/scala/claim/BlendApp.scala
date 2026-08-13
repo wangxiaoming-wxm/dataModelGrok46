@@ -101,7 +101,10 @@ object BlendApp {
     val w62o = new File("/workspace/submissions/cb_w62_oof.parquet")
     val w62t = new File("/workspace/submissions/cb_w62_test.parquet")
     val w62m = new File("/workspace/submissions/cb_w62_metrics.json")
-    if (w62o.isFile && w62t.isFile && w62m.isFile)
+    val tchm = new File("/workspace/submissions/cb_teacher_metrics.json")
+    val w62Auc = if (w62m.isFile) metricsAuc(w62m) else -1.0
+    val tchAuc = if (tchm.isFile) metricsAuc(tchm) else -1.0
+    if (w62o.isFile && w62t.isFile && w62Auc > tchAuc + 1e-12)
       (w62o.getAbsolutePath, w62t.getAbsolutePath, "cb_w62")
     else
       (
@@ -109,5 +112,18 @@ object BlendApp {
         "/workspace/submissions/cb_teacher_test.parquet",
         "cb_teacher"
       )
+  }
+
+  private def metricsAuc(f: File): Double = {
+    try {
+      val txt = new String(java.nio.file.Files.readAllBytes(f.toPath), StandardCharsets.UTF_8)
+      def grab(key: String): Option[Double] = {
+        val pat = raw""""$key"\s*:\s*([0-9.]+)""".r
+        pat.findFirstMatchIn(txt).map(_.group(1).toDouble)
+      }
+      grab("auc_cb_w62").orElse(grab("auc_blend")).orElse(grab("auc_cb_main")).getOrElse(0.0)
+    } catch {
+      case _: Throwable => 0.0
+    }
   }
 }

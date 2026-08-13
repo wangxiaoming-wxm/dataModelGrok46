@@ -23,15 +23,43 @@ def rank01(a: np.ndarray) -> np.ndarray:
     return pd.Series(a).rank(method="average", pct=True).to_numpy(dtype=np.float64)
 
 
+def _auc_of(oof: pd.DataFrame) -> float:
+    y = oof["label"].to_numpy()
+    r_m = rank01(oof["pred_cb_main"].to_numpy())
+    r_a = rank01(oof["pred_cb_alt"].to_numpy())
+    w62 = 0.62 * r_m + 0.38 * r_a
+    mx = np.maximum(r_m, r_a)
+    return max(float(roc_auc_score(y, w62)), float(roc_auc_score(y, mx)))
+
+
 def pick() -> tuple[pd.DataFrame, pd.DataFrame, str]:
+    """Prefer the parquet pack with higher honest rank-blend OOF, not merely 'w62 exists'.
+
+    1-seed × 1-bag W62 is weaker than teacher 3-bag (0.683 vs 0.692). Blindly
+    preferring cb_w62_*.parquet would downgrade the submission.
+    """
+    cands: list[tuple[str, Path, Path]] = []
     w62o, w62t = SUB / "cb_w62_oof.parquet", SUB / "cb_w62_test.parquet"
     if w62o.is_file() and w62t.is_file():
-        return pd.read_parquet(w62o), pd.read_parquet(w62t), "cb_w62"
-    return (
-        pd.read_parquet(SUB / "cb_teacher_oof.parquet"),
-        pd.read_parquet(SUB / "cb_teacher_test.parquet"),
-        "cb_teacher",
+        cands.append(("cb_w62", w62o, w62t))
+    cands.append(
+        ("cb_teacher", SUB / "cb_teacher_oof.parquet", SUB / "cb_teacher_test.parquet")
     )
+    best: tuple[pd.DataFrame, pd.DataFrame, str] | None = None
+    best_auc = -1.0
+    for tag, op, tp in cands:
+        if not op.is_file() or not tp.is_file():
+            continue
+        oof = pd.read_parquet(op)
+        tes = pd.read_parquet(tp)
+        a = _auc_of(oof)
+        print(f"candidate {tag} ungated_max_blend={a:.6f}", flush=True)
+        if a > best_auc:
+            best_auc = a
+            best = (oof, tes, tag)
+    if best is None:
+        raise FileNotFoundError("no teacher parquet")
+    return best
 
 
 def main() -> None:

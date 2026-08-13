@@ -169,16 +169,34 @@ object CatBoostArm {
         Some(apply.select(col("id")).join(t, Seq("id"), "left"))
       else None
     }
+    var best: Option[(DataFrame, String, Double)] = None
     packs.foreach { case (oofP, tesP, readyP) =>
       if (new File(readyP).isFile) {
+        val auc = metricsAuc(readyP)
         val hit = cover(new File(oofP)).orElse(cover(new File(tesP)))
-        hit.foreach { _ =>
-          println(s"[cb] using teacher parquet $readyP for pred_cb_main/alt")
-          return hit
+        hit.foreach { df =>
+          if (best.isEmpty || auc > best.get._3 + 1e-12)
+            best = Some((df, readyP, auc))
         }
       }
     }
-    None
+    best.foreach { case (_, p, a) =>
+      println(f"[cb] using teacher parquet $p auc=$a%.5f for pred_cb_main/alt")
+    }
+    best.map(_._1)
+  }
+
+  private def metricsAuc(path: String): Double = {
+    try {
+      val txt = new String(Files.readAllBytes(Paths.get(path)), StandardCharsets.UTF_8)
+      def grab(key: String): Option[Double] = {
+        val pat = raw""""$key"\s*:\s*([0-9.]+)""".r
+        pat.findFirstMatchIn(txt).map(_.group(1).toDouble)
+      }
+      grab("auc_cb_w62").orElse(grab("auc_blend")).orElse(grab("auc_cb_main")).getOrElse(0.0)
+    } catch {
+      case _: Throwable => 0.0
+    }
   }
 
   def sparkDual(train: DataFrame, apply: DataFrame): DataFrame = {
