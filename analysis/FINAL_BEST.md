@@ -40,6 +40,12 @@ Spark：`claim.BlendApp` / `CatBoostArm.joinTeacher` 读 `submissions/final_best
 
 `best_oof.npy` 的 VAL_ES 融合 **0.69713**（硬门后约 0.699）**没有 test 预测**，不能直接交。
 
-## 禁止再做
+## 当前提交（可交）
+
+`submissions/submission.csv`：VAL-ES seed 2026 max2 ⊕ teacher ⊕ LGB，硬门后 OOF **0.69826**。
+
+选包 `0.64 vales + 0.16 teacher + 0.20 LGB`（预注册 0.80 CB + 0.20 LGB，CB 内部再 80/20 混 teacher）。近邻 `0.80vales+0.20lgb` 为 **0.69816**。
+
+口径 **VAL_ES**（略乐观），不是 HONEST_NO_ES。4seed 仍在训，完成后若 gated 更高会覆盖。
 
 id / 字节 TE / 伪标签；高基数 TE 喂树；同一折先全量 OOF-TE；丢弃 x18/x19 之外再搜硬门平移；1 核上重跑 8seed×3bag HONEST。
