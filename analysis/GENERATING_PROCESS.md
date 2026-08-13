@@ -3,7 +3,7 @@
 更新：2026-08-13。全部数字为 **StratifiedKFold、折内 fit** 的诚实 OOF AUC。正例率 0.1002。  
 禁止口径：全量 TE、test 伪标签、id 特征。历史泄漏 0.73 不作真实水平。
 
-当前最佳诚实 OOF（见文末配方）**0.69681**（8-seed val-ES max2 ⊕ LGB），距 0.70 还差 ~0.003。泄漏全量 TE 的 0.73 不作真实水平。
+当前最佳诚实 OOF：**0.69713**（见文末配方），距 0.70 差 **0.0029**。未宣称 0.70。
 
 ---
 
@@ -26,7 +26,7 @@ y_i\sim\mathrm{Bernoulli}(p_i)
 
 **乘法版** \(p=a_s\cdot f(\mathrm{days})\cdot g_s(r)+h_{\mathrm{region}}+\cdots\) ALS-RMSE 只有 **0.6428**，明显更差。不要往 GLM-logit / log-link 频率模型上靠。
 
-小 MLP（source/region one-hot + days/condition/age）诚实 OOF **0.6419**，**达不到 0.70**，不能把网拆成“已够用的嵌入”。Bayes 上限更像 CatBoost 在同类字段上的 **0.669（仅 5 列）～0.692（10 折×3bag×1seed）**。第 1 名 0.749 仍高于我们能用的灵活模型，优先解释为更强的类别有序编码 + 多种子，而不是 MLP 漏掉的光滑流形。
+小 MLP（source/region one-hot + days/condition/age）诚实 OOF **0.6419**，**达不到 0.70**，不能把网拆成“已够用的嵌入”。Bayes 上限更像 CatBoost 在同类字段上的 **0.669（仅 5 列）～0.697（10 折×3bag×8seed val-ES + 多样性融合）**。第 1 名 0.749 仍高于我们能用的灵活模型（核心字段 MLP 0.64、2D 核 0.65、加法频率 0.66、Ordered boosting 0.70 附近）。优先解释为 **更强的类别有序编码 + 重 bagging**，或未公开的分段生成器，而不是 MLP 漏掉的光滑流形。
 
 ---
 
@@ -210,7 +210,7 @@ Spark 可实现：数值、分箱、折内 TE 分数、GBT。高基数 `source|c
 8. **`pow_rate15 = days^{1.5} * (1-cond_rk)^{1.23}`**
 9. `u_shape=(cond_rk-0.5)^2`
 10. `ushape_car10 = u_shape * I(CAR_10)`，`mono_car1=(1-cond_rk)*I(CAR_1)`，`rev_car7=cond_rk*I(CAR_7)`
-11. 窗口：`I(days<50)`, `I(days∈[700,880])`, **`I(days∈[1725,1825])`**, `I(days∈[1950,2000])`, **`I(days∈[9370,9475])`**
+11. 窗口：`I(days<50)`, `I(days∈[700,880])`, **`I(days∈[1725,1825])`**, `I(days∈[1950,2000])`, **`I(days∈[2110,2210])`**, **`I(days∈[9370,9475])`**
 12. `I(age_range>=8)`, `I(condition_f<0.05)`, `cond_miss`
 13. 弱连续：`x20`, `V`, `cc`, `x1`, `x5`, `x14`, `x17`, `t3_num`（解析数字）
 
@@ -227,8 +227,11 @@ Spark 可实现：数值、分箱、折内 TE 分数、GBT。高基数 `source|c
 
 ### 中基数类别 → 整数编码进 GBT / 或折内 TE 进 GLM
 
-`source, region, age_range, source|region, source|age, region|age, source|cond_q10, source|days_q5`  
-**不要**把 `source|cond_q|days_q`（~1100 水平）当作树的类别列。
+`source, region, age_range, source|region, source|age, region|age, source|cond_q10, source|days_q5, t3_letter`  
+**不要**把 `source|cond_q|days_q`（~1100 水平）当作树的类别列。  
+**不要**把 13 个原子的全部两两交叉（91 列）喂进去（5 折 Ordered 掉到 0.669）。
+
+显式 3-way `source|region|age`（笔记里点名的交叉）在已有 2-way 时 **5 折 0.6873，零增益**——CatBoost 默认 CTR complexity=4 已经从 2-way 组出等价物。
 
 ### 模型
 
@@ -242,9 +245,21 @@ Spark 可实现：数值、分箱、折内 TE 分数、GBT。高基数 `source|c
 
 ## 当前最佳 OOF 与配方
 
-文件：`/workspace/analysis/reverse/best_oof.npy`
+文件：`/workspace/analysis/reverse/best_oof.npy`  
+**AUC = 0.69713**
 
-**Inner-ES（训练折内 12% 早停，编码器只在训练折 fit）——更保守的诚实口径**
+配方（全部折内 fit，无 test 标签）：
+
+1. **臂 H**：CatBoost 双世界 RMSE，**W62 协议**（OOF 折上 early stopping），10-fold × 3-bag × **8 seed**，Ordered d5 l2=10 + Plain d6 rsm=0.3。中基数类别 23 列（`analysis/reverse/cb_features.py` 的 `CATS`，含 2-way，**不含** `src_cq_dq`）。融合 `max(rank(main_seeds), rank(alt_seeds))` → **0.69592**。
+2. **臂 J**：同上协议，2-seed × 3-bag，全 2-way 列表（23 cats）→ max2 **0.69509**。
+3. **臂 L**：LightGBM 生成过程数值 + 中基数整数编码，外折 ES（略乐观）→ **0.67857**。
+4. **融合**：`0.80 * max(rank(H), rank(J)) + 0.20 * rank(L)` → **0.69713**。
+
+Spark 实现要点：数值/分箱/窗口按上表 broadcast；中基数交叉 `concat_ws('|', ...)`；GBTRegressor squared 或 CatBoostSpark Ordered。高基数 3-way 只做独立 TE 分数。
+
+**没有打到 0.70。** 历史 W62 0.70159 与我们最接近的诚实 val-ES 8seed 差 ~0.005。已排除：全部 78 个两两交叉、无 ES 800 轮、t3/version 当类别、Langevin、AUC 早停、分车型 CatBoost、Lossguide、更深 Plain、src|region|age 显式 3-way、FM。缺口更像是 **原 FeatureBuilder 的某一组中基数交叉我们没对齐**，或 CatBoost 版本/CTR 默认值的细差，而不是再堆原始列。
+
+无 CatBoost 原生类别的便携上限：HGB+freq+TE **0.669**。Spark GBT 不要预期 0.70，除非走 CatBoostSpark Ordered + 同样 bagging。
 
 | 配方 | OOF |
 |---|---:|
@@ -264,8 +279,45 @@ Spark 可实现：数值、分箱、折内 TE 分数、GBT。高基数 `source|c
 | max(8seed, full-2way-cats) ×0.80 + LGB | **0.69713**（相关 0.99，几乎无新信息） |
 | 全 2-way cats 2seed×3bag val-ES | max2 0.69509（23 cats，无增益） |
 
-历史 W62 本地 0.70159 使用 10-fold×8seed×3bag + 折上 ES + **80+ 手工类别交叉（约 121 列，arm2 rsm=0.3）**。我们用 ~14–23 cats 的 8-seed val-ES 停在 **0.696**。缺口 ~0.005 更像是缺交叉列，不是再多种子（多种子 Spearman≈0.97）。
+历史 W62 本地 0.70159 使用 10-fold×8seed×3bag + 折上 ES。我们用 23 个中基数类别的 8-seed val-ES 停在 **0.6968–0.6971**。
 
-Inner-ES 把同一套模型压到 0.692，说明 **0.70 数字对早停协议敏感约 +0.003～0.004**。生成过程数值特征进 CatBoost 无增益；高基数 3-way 当类别列无增益。
+Inner-ES 把同一套模型压到 0.692，说明 **0.70 对早停协议敏感约 +0.003～0.004**。
 
-要在 **Spark GBT** 上接近：同一套数值 + 中基数 TE/整数编码 + RMSE；不要把 `src|cond_q|days_q` 喂树。完整 0.70 需要对 **80+ 两两交叉** 做 Ordered boosting（CatBoostSpark）或把交叉做成折内 TE 分数再 GLM/融合。
+要在 **Spark GBT** 上接近：同一套数值 + 中基数 TE/整数编码 + RMSE；不要把 `src|cond_q|days_q` 喂树。完整 0.70 需要 Ordered boosting（CatBoostSpark）+ val-ES bagging。无 CatBoost 原生类别时便携融合停在 ~0.67。
+
+---
+
+## 9. 80+ 交叉重建（未打到 0.70 的负结果，有数字）
+
+把 13 个原子类别（source/region/age/grades/month/version/days_q5/cond_q/ratio_q/rate_q/t3_letter/win/x20_q）做成 **全部 78 个两两拼接 + 13 = 91 列**，对标「121 特征 + rsm=0.3」：
+
+| 表示 | 协议 | OOF |
+|---|---|---:|
+| 当前 23 cats，Ordered，默认 CTR complexity 4 | 5-fold val-ES 1seed | **0.68733** |
+| 同上 + t3_letter | 5-fold | 0.68855 |
+| 语义 32 cats，CTR=4 | 5-fold | 0.68357 |
+| 全部 91 cats，CTR complexity=1 | 5-fold | 0.66911 |
+| 仅 13 原子，CTR=4（让 CatBoost 自己组合） | 5-fold | 0.66794 |
+| 当前 23 cats，CTR=1 | 5-fold | 0.66846 |
+| 91-key LOO-TE + Ridge | 10-fold | 0.64708 |
+| 语义 32-key TE + Ridge | 10-fold | 0.65393 |
+| W62 CATS_W62(16)+v6 比值，双臂 | 5-fold val-ES | max2 0.68435 |
+| 无 ES、800 iter、8seed×1bag×10fold | 诚实 | w62 **0.68657** |
+| Langevin SGLB | 5-fold | 0.68791 |
+| t3 163 水平当类别 | 5-fold | 0.68789 |
+| 显式 source\|region\|age | 5-fold | 0.68730 |
+| 分车型 CatBoost 混合全局 | 5-fold | 0.68750（全局 0.6857） |
+| eval_metric=AUC 早停双臂 | 5-fold | max2 0.68767 |
+| Lossguide Plain | 5-fold | 0.67338 |
+| 中基数 FM k=8 RMSE | 5-fold | 0.567 |
+
+结论：
+
+1. **乱加全部两两交叉会掉 0.018**，不是 W62 的 80+ 配方。
+2. 显式中基数 2-way + **默认 CTR complexity=4** 才是对的；complexity=1 或只丢原子列都掉到 0.67。
+3. 无 early-stopping 的 800 轮比 val-ES 差 ~0.01。不要用 no-ES 数字当 0.70。
+4. 多种子/更多 2-way/t3/version/Langevin 的边际都 <0.002，臂间 Spearman≥0.99。
+
+额外确认的 days 窗（一半发现一半确认）：**[2110,2210] 全数据 n=142 率 0.028**（约 6×360=2160 附近）。与 [700,880]、[1725,1825] 一起做成指示列。360/365 全局周年距离 AUC 只有 0.51，**不是**全局周年生成器；只是几个具体坑。
+
+Spark：`concat_ws('|', source, cond_q)` 等中基数键；91 个全配对不要做。`I(days∈[2110,2210])` 与已有窗口并列。
