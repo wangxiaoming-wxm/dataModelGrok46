@@ -1,0 +1,284 @@
+=== residual after exp8h_max2 ===
+  0.4338  days              num
+  0.1287  w1                num
+  0.1240  x19               num
+  0.1237  x1                num
+  0.1224  V                 num
+  0.1215  w2                num
+  0.1181  x13               num
+  0.1149  x9                num
+  0.1148  x17               num
+  0.1114  x5                num
+  0.1089  code              cat_gmean
+  0.1075  cc                num
+  0.0930  condition         num
+  0.0894  max_g             num
+  0.0890  x11               num
+  te_ridge atomic fold 0 auc=0.6254 a=1.0 n_cats=13
+  te_ridge atomic fold 1 auc=0.6627 a=1.0 n_cats=13
+  te_ridge atomic fold 2 auc=0.6765 a=1.0 n_cats=13
+  te_ridge atomic fold 3 auc=0.6409 a=1.0 n_cats=13
+  te_ridge atomic fold 4 auc=0.6366 a=1.0 n_cats=13
+  te_ridge atomic fold 5 auc=0.6409 a=1.0 n_cats=13
+  te_ridge atomic fold 6 auc=0.6009 a=1.0 n_cats=13
+  te_ridge atomic fold 7 auc=0.6362 a=1.0 n_cats=13
+  te_ridge atomic fold 8 auc=0.6638 a=1.0 n_cats=13
+  te_ridge atomic fold 9 auc=0.6166 a=1.0 n_cats=13
+=== TE-RIDGE atomic OOF 0.63960 dt=2.6s n_cats=13 ===
+  blends vs current best 0.69681:
+    0.63960  te_atomic
+    0.68440  max(best,new)
+    0.68817  0.7best+0.3new
+    0.69357  0.85best+0.15new
+    0.68456  max(h,new)
+    0.68964  max(h,new)+lgb
+    0.69355  0.75h+0.15new+0.1lgb
+  te_ridge sem fold 0 auc=0.6393 a=1.0 n_cats=32
+  te_ridge sem fold 1 auc=0.6733 a=1.0 n_cats=32
+  te_ridge sem fold 2 auc=0.6758 a=1.0 n_cats=32
+  te_ridge sem fold 3 auc=0.6570 a=1.0 n_cats=32
+  te_ridge sem fold 4 auc=0.6408 a=1.0 n_cats=32
+  te_ridge sem fold 5 auc=0.6660 a=1.0 n_cats=32
+  te_ridge sem fold 6 auc=0.6193 a=1.0 n_cats=32
+  te_ridge sem fold 7 auc=0.6487 a=1.0 n_cats=32
+  te_ridge sem fold 8 auc=0.6848 a=1.0 n_cats=32
+  te_ridge sem fold 9 auc=0.6392 a=1.0 n_cats=32
+=== TE-RIDGE sem OOF 0.65393 dt=4.7s n_cats=32 ===
+  blends vs current best 0.69681:
+    0.65393  te_sem
+    0.68796  max(best,new)
+    0.69019  0.7best+0.3new
+    0.69429  0.85best+0.15new
+    0.68770  max(h,new)
+    0.69034  max(h,new)+lgb
+    0.69428  0.75h+0.15new+0.1lgb
+  te_ridge 80 fold 0 auc=0.6360 a=1.0 n_cats=91
+  te_ridge 80 fold 1 auc=0.6681 a=1.0 n_cats=91
+  te_ridge 80 fold 2 auc=0.6568 a=1.0 n_cats=91
+  te_ridge 80 fold 3 auc=0.6483 a=1.0 n_cats=91
+  te_ridge 80 fold 4 auc=0.6313 a=1.0 n_cats=91
+  te_ridge 80 fold 5 auc=0.6522 a=1.0 n_cats=91
+  te_ridge 80 fold 6 auc=0.6234 a=1.0 n_cats=91
+  te_ridge 80 fold 7 auc=0.6460 a=1.0 n_cats=91
+  te_ridge 80 fold 8 auc=0.6818 a=1.0 n_cats=91
+  te_ridge 80 fold 9 auc=0.6318 a=1.0 n_cats=91
+=== TE-RIDGE 80 OOF 0.64708 dt=11.4s n_cats=91 ===
+  blends vs current best 0.69681:
+    0.64708  te_80
+    0.68496  max(best,new)
+    0.69062  0.7best+0.3new
+    0.69475  0.85best+0.15new
+    0.68455  max(h,new)
+    0.68883  max(h,new)+lgb
+    0.69474  0.75h+0.15new+0.1lgb
+  cb cur_def fold 0 auc=0.6985 it=447 ncats=23 dt_fold
+  cb cur_def fold 1 auc=0.6802 it=396 ncats=23 dt_fold
+  cb cur_def fold 2 auc=0.6942 it=599 ncats=23 dt_fold
+  cb cur_def fold 3 auc=0.6654 it=370 ncats=23 dt_fold
+  cb cur_def fold 4 auc=0.7006 it=565 ncats=23 dt_fold
+=== CB cur_def OOF 0.68733 dt=115.4s ===
+  blends vs current best 0.69681:
+    0.68733  cur_def
+    0.69413  max(best,new)
+    0.69548  0.7best+0.3new
+    0.69632  0.85best+0.15new
+    0.69404  max(h,new)
+    0.69538  max(h,new)+lgb
+    0.69626  0.75h+0.15new+0.1lgb
+  10fold-best blend 0.7/0.3 -> 0.69548
+  cb cur_c1 fold 0 auc=0.6821 it=599 ncats=23 dt_fold
+  cb cur_c1 fold 1 auc=0.6529 it=144 ncats=23 dt_fold
+  cb cur_c1 fold 2 auc=0.6783 it=421 ncats=23 dt_fold
+  cb cur_c1 fold 3 auc=0.6489 it=309 ncats=23 dt_fold
+  cb cur_c1 fold 4 auc=0.6819 it=545 ncats=23 dt_fold
+=== CB cur_c1 OOF 0.66846 dt=39.7s ===
+  blends vs current best 0.69681:
+    0.66846  cur_c1
+    0.69080  max(best,new)
+    0.69138  0.7best+0.3new
+    0.69451  0.85best+0.15new
+    0.69116  max(h,new)
+    0.69355  max(h,new)+lgb
+    0.69448  0.75h+0.15new+0.1lgb
+  10fold-best blend 0.7/0.3 -> 0.69138
+  cb atom_c4 fold 0 auc=0.6821 it=587 ncats=13 dt_fold
+  cb atom_c4 fold 1 auc=0.6589 it=270 ncats=13 dt_fold
+  cb atom_c4 fold 2 auc=0.6728 it=390 ncats=13 dt_fold
+  cb atom_c4 fold 3 auc=0.6475 it=328 ncats=13 dt_fold
+  cb atom_c4 fold 4 auc=0.6804 it=448 ncats=13 dt_fold
+=== CB atom_c4 OOF 0.66794 dt=58.5s ===
+  blends vs current best 0.69681:
+    0.66794  atom_c4
+    0.68995  max(best,new)
+    0.69164  0.7best+0.3new
+    0.69468  0.85best+0.15new
+    0.68996  max(h,new)
+    0.69300  max(h,new)+lgb
+    0.69470  0.75h+0.15new+0.1lgb
+  10fold-best blend 0.7/0.3 -> 0.69164
+  cb atom_c2 fold 0 auc=0.6799 it=431 ncats=13 dt_fold
+  cb atom_c2 fold 1 auc=0.6586 it=257 ncats=13 dt_fold
+  cb atom_c2 fold 2 auc=0.6721 it=425 ncats=13 dt_fold
+  cb atom_c2 fold 3 auc=0.6479 it=322 ncats=13 dt_fold
+  cb atom_c2 fold 4 auc=0.6797 it=461 ncats=13 dt_fold
+=== CB atom_c2 OOF 0.66713 dt=51.5s ===
+  blends vs current best 0.69681:
+    0.66713  atom_c2
+    0.69004  max(best,new)
+    0.69130  0.7best+0.3new
+    0.69455  0.85best+0.15new
+    0.69019  max(h,new)
+    0.69308  max(h,new)+lgb
+    0.69455  0.75h+0.15new+0.1lgb
+  10fold-best blend 0.7/0.3 -> 0.69130
+  cb sem_c1 fold 0 auc=0.6832 it=570 ncats=32 dt_fold
+  cb sem_c1 fold 1 auc=0.6602 it=339 ncats=32 dt_fold
+  cb sem_c1 fold 2 auc=0.6820 it=439 ncats=32 dt_fold
+  cb sem_c1 fold 3 auc=0.6495 it=362 ncats=32 dt_fold
+  cb sem_c1 fold 4 auc=0.6798 it=576 ncats=32 dt_fold
+=== CB sem_c1 OOF 0.67027 dt=56.0s ===
+  blends vs current best 0.69681:
+    0.67027  sem_c1
+    0.69157  max(best,new)
+    0.69184  0.7best+0.3new
+    0.69475  0.85best+0.15new
+    0.69172  max(h,new)
+    0.69399  max(h,new)+lgb
+    0.69471  0.75h+0.15new+0.1lgb
+  10fold-best blend 0.7/0.3 -> 0.69184
+  cb sem_c4 fold 0 auc=0.6915 it=586 ncats=32 dt_fold
+  cb sem_c4 fold 1 auc=0.6737 it=376 ncats=32 dt_fold
+  cb sem_c4 fold 2 auc=0.6961 it=599 ncats=32 dt_fold
+  cb sem_c4 fold 3 auc=0.6642 it=393 ncats=32 dt_fold
+  cb sem_c4 fold 4 auc=0.6950 it=599 ncats=32 dt_fold
+=== CB sem_c4 OOF 0.68357 dt=166.4s ===
+  blends vs current best 0.69681:
+    0.68357  sem_c4
+    0.69427  max(best,new)
+    0.69487  0.7best+0.3new
+    0.69609  0.85best+0.15new
+    0.69474  max(h,new)
+    0.69598  max(h,new)+lgb
+    0.69604  0.75h+0.15new+0.1lgb
+  10fold-best blend 0.7/0.3 -> 0.69487
+  cb c80_c1 fold 0 auc=0.6853 it=590 ncats=91 dt_fold
+  cb c80_c1 fold 1 auc=0.6562 it=271 ncats=91 dt_fold
+  cb c80_c1 fold 2 auc=0.6794 it=584 ncats=91 dt_fold
+  cb c80_c1 fold 3 auc=0.6469 it=367 ncats=91 dt_fold
+  cb c80_c1 fold 4 auc=0.6809 it=502 ncats=91 dt_fold
+=== CB c80_c1 OOF 0.66911 dt=129.1s ===
+  blends vs current best 0.69681:
+    0.66911  c80_c1
+    0.69165  max(best,new)
+    0.69176  0.7best+0.3new
+    0.69476  0.85best+0.15new
+    0.69200  max(h,new)
+    0.69436  max(h,new)+lgb
+    0.69474  0.75h+0.15new+0.1lgb
+  10fold-best blend 0.7/0.3 -> 0.69176
+=== EXP9 DONE === {
+  "best_before": 0.6968094761555602,
+  "te_ridge": [
+    {
+      "which": "atomic",
+      "oof": 0.6396020373718532,
+      "n_cats": 13,
+      "blends": {
+        "te_atomic": 0.6396020373718532,
+        "max(best,new)": 0.6843989311181861,
+        "0.7best+0.3new": 0.6881652149267681,
+        "0.85best+0.15new": 0.6935703785351081,
+        "max(h,new)": 0.6845555693551122,
+        "max(h,new)+lgb": 0.6896366589999514,
+        "0.75h+0.15new+0.1lgb": 0.6935472161782819
+      }
+    },
+    {
+      "which": "sem",
+      "oof": 0.6539254796075725,
+      "n_cats": 32,
+      "blends": {
+        "te_sem": 0.6539254796075725,
+        "max(best,new)": 0.6879630729834668,
+        "0.7best+0.3new": 0.6901946454004884,
+        "0.85best+0.15new": 0.6942917205048409,
+        "max(h,new)": 0.6876952006999559,
+        "max(h,new)+lgb": 0.6903362318373286,
+        "0.75h+0.15new+0.1lgb": 0.6942816196274278
+      }
+    },
+    {
+      "which": "80",
+      "oof": 0.6470763881093465,
+      "n_cats": 91,
+      "blends": {
+        "te_80": 0.6470763881093465,
+        "max(best,new)": 0.6849589824764206,
+        "0.7best+0.3new": 0.6906159216498325,
+        "0.85best+0.15new": 0.6947464838995,
+        "max(h,new)": 0.6845483544426744,
+        "max(h,new)+lgb": 0.6888326689642927,
+        "0.75h+0.15new+0.1lgb": 0.6947350146766246
+      }
+    }
+  ],
+  "cb_grid": [
+    {
+      "name": "cur_def",
+      "which": "current",
+      "ctr": null,
+      "oof": 0.68732671770645,
+      "mean_it": 475.4,
+      "n_cats": 23,
+      "n_folds": 5,
+      "blends": {
+        "cur_def": 0.68732671770645,
+        "max(best,new)": 0.6941263248569556,
+        "0.7best+0.3new": 0.6954774291664776,
+        "0.85best+0.15new": 0.6963213748896367,
+        "max(h,new)": 0.6940354915972642,
+        "max(h,new)+lgb": 0.6953772911576421,
+        "0.75h+0.15new+0.1lgb": 0.6962613169633438
+      }
+    },
+    {
+      "name": "cur_c1",
+      "which": "current",
+      "ctr": 1,
+      "oof": 0.6684630803476533,
+      "mean_it": 403.6,
+      "n_cats": 23,
+      "n_folds": 5,
+      "blends": {
+        "cur_c1": 0.6684630803476533,
+        "max(best,new)": 0.6907951002683749,
+        "0.7best+0.3new": 0.6913768461219397,
+        "0.85best+0.15new": 0.694507446386732,
+        "max(h,new)": 0.6911568908086195,
+        "max(h,new)+lgb": 0.693546917630181,
+        "0.75h+0.15new+0.1lgb": 0.6944804775416196
+      }
+    },
+    {
+      "name": "atom_c4",
+      "which": "atomic",
+      "ctr": 4,
+      "oof": 0.6679389791565657,
+      "mean_it": 404.6,
+      "n_cats": 13,
+      "n_folds": 5,
+      "blends": {
+        "atom_c4": 0.6679389791565657,
+        "max(best,new)": 0.6899472485408958,
+        "0.7best+0.3new": 0.6916374039769793,
+        "0.85best+0.15new": 0.6946809028333409,
+        "max(h,new)": 0.689957050870208,
+        "max(h,new)+lgb": 0.6929954744088549,
+        "0.75h+0.15new+0.1lgb": 0.6947023734175956
+      }
+    },
+    {
+      "name": "atom_c2",
+      "which": "atomic",
+      "ctr": 2,
+      "oof
