@@ -205,6 +205,18 @@ object TrainApp {
     reportBuf.append(s"blend_op=$bestOp\n")
     reportBuf.append(f"auc_blend=$bestBlend%.5f%n")
 
+    val rankedDays = ranked.join(
+      withFold.select(col("id").cast(StringType).as("id"), col("days")),
+      Seq("id"),
+      "left"
+    )
+    val selOof =
+      if (bestOp == "max2") applyMax2(rankedDays, Seq("pred_cb_main", "pred_cb_alt"))
+      else applyBlend(rankedDays, bestWeights)
+    val aucGated = auc(InsurerGate.onScore(selOof), "label", "blend")
+    println(f"[OOF] insurer_gate=$aucGated%.5f  (frozen zero1750 / -0.10@750 / +0.05@hot)")
+    reportBuf.append(f"auc_insurer_gate=$aucGated%.5f%n")
+
     val header =
       s"""sparkml_oof
          |n_folds=$nFolds
@@ -223,6 +235,7 @@ object TrainApp {
          |auc_cb_alt=$aucCbAlt
          |selected=$bestName
          |auc_blend=$bestBlend
+         |auc_insurer_gate=$aucGated
          |""".stripMargin
     val report = header + reportBuf.toString
     new File(outDir).mkdirs()
@@ -237,11 +250,17 @@ object TrainApp {
       withTrainMain = true
     )
     val needRanks = bestWeights.keys.toSeq.filter(fullScored.columns.contains)
-    val testRanked = addRanks(fullScored, needRanks)
+    val testRanked = addRanks(fullScored, needRanks).join(
+      testRaw.select(col("id").cast(StringType).as("id"), col("days")),
+      Seq("id"),
+      "left"
+    )
     val blendedTest =
       if (bestOp == "max2") applyMax2(testRanked, Seq("pred_cb_main", "pred_cb_alt"))
       else applyBlend(testRanked, bestWeights)
-    val predMap = blendedTest.select(col("id"), col("blend")).collect().map { r =>
+    val gatedTest = InsurerGate.onScore(blendedTest)
+    val submitTest = addRanks(gatedTest, Seq("blend")).withColumn("blend", col("r__blend"))
+    val predMap = submitTest.select(col("id"), col("blend")).collect().map { r =>
       r.getString(0) -> (if (r.isNullAt(1) || r.getDouble(1).isNaN) 0.5 else r.getDouble(1))
     }.toMap
     val outPath = s"$outDir/submission.csv"

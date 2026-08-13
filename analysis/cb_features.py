@@ -304,6 +304,23 @@ def fold_features(
         df["ushape_car10"] = df["u_shape"] * (car == "CAR_10").astype(np.int8)
         df["mono_car1"] = (1.0 - df["cond_rk"]) * (car == "CAR_1").astype(np.int8)
         df["rev_car7"] = df["cond_rk"] * (car == "CAR_7").astype(np.int8)
+        # Customer surplus vs insurer deny (do NOT add these to CatBoost cat lists).
+        deny = ((df["days"] >= 700) & (df["days"] < 880)) | ((df["days"] >= 1725) & (df["days"] < 1825))
+        df["deny"] = deny.astype(np.int8)
+        df["claim_util"] = df["rate"] * (1.0 - df["deny"].astype(np.float64))
+        df["expos_net"] = df["days"] * (1.0 - df["deny"].astype(np.float64)) * (1.0 + 0.5 * df["age8"].astype(np.float64))
+        df["dump_poor"] = df["w_9370"].astype(np.float64) * (1.0 - df["cond_rk"])
+        df["lemon"] = ((df["days"] < 100) & (df["cond_rk"] < 0.15)).astype(np.int8)
+        df["new_good"] = np.where(df["days"] < 100, df["cond_rk"], 0.0)
+        df["age8_poor"] = df["age8"].astype(np.float64) * (1.0 - df["cond_rk"])
+        df["repair_car10"] = np.clip(1.0 - 4.0 * (df["cond_rk"] - 0.5) ** 2, 0.0, 1.0) * (
+            car == "CAR_10"
+        ).astype(np.float64)
+        df["tls_screen"] = ((df["cond_rk"] < 0.10) & car.isin(["CAR_7", "CAR_10"])).astype(np.int8)
+        _anniv = np.array([365.0, 730.0, 1095.0, 1460.0, 1825.0, 2190.0, 2555.0, 2920.0])
+        days_v = df["days"].to_numpy(np.float64)
+        df["anniv_dist"] = np.min(np.abs(days_v[:, None] - _anniv[None, :]), axis=1)
+        df["near_anniv"] = (df["anniv_dist"] < 40.0).astype(np.int8)
 
     def _qcut_all(name: str, col: str, q: int) -> None:
         trn[name], val[name] = _qcut_apply(trn[col], val[col], q=q)

@@ -19,7 +19,9 @@ object FeatureEngine {
     "v_r", "cc_r", "maxg_r", "x14_r", "x17_r",
     "cond_z", "days_z",
     "ushape_car10", "mono_car1", "rev_car7",
-    "pow_ratio_s", "pow_rate15", "w_hot9370"
+    "pow_ratio_s", "pow_rate15", "w_hot9370",
+    "deny", "claim_util", "expos_net", "dump_poor", "anniv_dist", "near_anniv",
+    "lemon", "new_good", "age8_poor", "repair_car10", "tls_screen"
   )
 
   val NumericAlt: Seq[String] = Seq(
@@ -30,14 +32,17 @@ object FeatureEngine {
     "w_safe750", "w_safe1750", "w_hot1950", "w_new50",
     "t3_num", "days_z", "cond_z",
     "ushape_car10", "mono_car1", "rev_car7",
-    "pow_ratio_s", "pow_rate15", "w_hot9370"
+    "pow_ratio_s", "pow_rate15", "w_hot9370",
+    "deny", "claim_util", "expos_net", "dump_poor", "anniv_dist",
+    "repair_car10", "tls_screen"
   )
 
   val NumericBig: Seq[String] = Seq(
     "days", "days_log", "condition_f", "cond_r", "cond_rk",
     "ratio", "rate", "u_shape", "age_range", "inv_cond",
     "ushape_car10", "mono_car1", "days_z", "cond_z",
-    "pow_ratio_s", "pow_rate15", "w_hot9370"
+    "pow_ratio_s", "pow_rate15", "w_hot9370",
+    "deny", "claim_util", "dump_poor", "repair_car10"
   )
 
   val AllNumeric: Seq[String] = (NumericMain ++ NumericAlt ++ NumericBig).distinct
@@ -311,6 +316,48 @@ object FeatureEngine {
           pow(greatest(lit(1.0) - col("cond_rk"), lit(1e-6)), lit(1.23))
       )
       .withColumn("w_hot9370", ((col("days") >= 9370.0 && col("days") < 9475.0).cast(DoubleType)))
+      .withColumn(
+        "deny",
+        ((col("w_safe750") + col("w_safe1750")) > lit(0.5)).cast(DoubleType)
+      )
+      .withColumn("claim_util", col("rate") * (lit(1.0) - col("deny")))
+      .withColumn(
+        "expos_net",
+        col("days") * (lit(1.0) - col("deny")) * (lit(1.0) + lit(0.5) * col("age8"))
+      )
+      .withColumn("dump_poor", col("w_hot9370") * (lit(1.0) - col("cond_rk")))
+      .withColumn(
+        "lemon",
+        ((col("days") < 100.0) && (col("cond_rk") < 0.15)).cast(DoubleType)
+      )
+      .withColumn(
+        "new_good",
+        when(col("days") < 100.0, col("cond_rk")).otherwise(lit(0.0))
+      )
+      .withColumn("age8_poor", col("age8") * (lit(1.0) - col("cond_rk")))
+      .withColumn(
+        "repair_car10",
+        greatest(lit(0.0), lit(1.0) - lit(4.0) * pow(col("cond_rk") - lit(0.5), 2.0)) *
+          (col("car") === lit("CAR_10")).cast(DoubleType)
+      )
+      .withColumn(
+        "tls_screen",
+        ((col("cond_rk") < 0.10) && col("car").isin("CAR_7", "CAR_10")).cast(DoubleType)
+      )
+      .withColumn(
+        "anniv_dist",
+        least(
+          abs(col("days") - lit(365.0)),
+          abs(col("days") - lit(730.0)),
+          abs(col("days") - lit(1095.0)),
+          abs(col("days") - lit(1460.0)),
+          abs(col("days") - lit(1825.0)),
+          abs(col("days") - lit(2190.0)),
+          abs(col("days") - lit(2555.0)),
+          abs(col("days") - lit(2920.0))
+        )
+      )
+      .withColumn("near_anniv", (col("anniv_dist") < lit(40.0)).cast(DoubleType))
   }
 
   def addCrosses(df: DataFrame): DataFrame = {

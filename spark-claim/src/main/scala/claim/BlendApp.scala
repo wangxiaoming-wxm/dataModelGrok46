@@ -39,19 +39,31 @@ object BlendApp {
     val tes = spark.read.parquet(tesPath)
       .withColumn("id", col("id").cast(StringType))
 
-    val oofR = TrainApp.addRanks(oof, Seq("pred_cb_main", "pred_cb_alt"))
-    val tesR = TrainApp.addRanks(tes, Seq("pred_cb_main", "pred_cb_alt"))
+    val trainDays = spark.read.option("header", "true").option("inferSchema", "true")
+      .csv(s"$dataDir/train.csv")
+      .select(col("id").cast(StringType).as("id"), col("days"))
+    val testDays = spark.read.option("header", "true").option("inferSchema", "true")
+      .csv(s"$dataDir/test.csv")
+      .select(col("id").cast(StringType).as("id"), col("days"))
+
+    val oofR = TrainApp.addRanks(oof.join(trainDays, Seq("id"), "left"), Seq("pred_cb_main", "pred_cb_alt"))
+    val tesR = TrainApp.addRanks(tes.join(testDays, Seq("id"), "left"), Seq("pred_cb_main", "pred_cb_alt"))
     val w62Oof = TrainApp.applyBlend(oofR, Map("pred_cb_main" -> 0.62, "pred_cb_alt" -> 0.38))
     val max2Oof = TrainApp.applyMax2(oofR, Seq("pred_cb_main", "pred_cb_alt"))
     val aucW62 = TrainApp.auc(w62Oof, "label", "blend")
     val aucMax2 = TrainApp.auc(max2Oof, "label", "blend")
     val useMax2 = aucMax2 >= aucW62
-    println(f"[blend] oof w62=$aucW62%.5f max2=$aucMax2%.5f selected=${if (useMax2) "max2" else "w62"}")
+    val ungated = if (useMax2) max2Oof else w62Oof
+    val gatedOof = InsurerGate.onScore(ungated)
+    val aucGated = TrainApp.auc(gatedOof, "label", "blend")
+    println(f"[blend] oof w62=$aucW62%.5f max2=$aucMax2%.5f gated=$aucGated%.5f selected=${if (useMax2) "max2" else "w62"}+insurer_gate")
 
     val tesBlend =
       if (useMax2) TrainApp.applyMax2(tesR, Seq("pred_cb_main", "pred_cb_alt"))
       else TrainApp.applyBlend(tesR, Map("pred_cb_main" -> 0.62, "pred_cb_alt" -> 0.38))
-    val predMap = tesBlend.select(col("id"), col("blend")).collect().map { r =>
+    val tesGated = InsurerGate.onScore(tesBlend)
+    val tesSubmit = TrainApp.addRanks(tesGated, Seq("blend")).withColumn("blend", col("r__blend"))
+    val predMap = tesSubmit.select(col("id"), col("blend")).collect().map { r =>
       r.getString(0) -> (if (r.isNullAt(1) || r.getDouble(1).isNaN) 0.5 else r.getDouble(1))
     }.toMap
 
@@ -72,8 +84,9 @@ object BlendApp {
          |mapped=${predMap.size}
          |auc_w62=$aucW62
          |auc_max2=$aucMax2
-         |selected=${if (useMax2) "cb_max2" else "cb_w62"}
-         |auc_blend=${if (useMax2) aucMax2 else aucW62}
+         |auc_insurer_gate=$aucGated
+         |selected=${if (useMax2) "cb_max2" else "cb_w62"}+insurer_gate
+         |auc_blend=$aucGated
          |""".stripMargin
     java.nio.file.Files.write(
       java.nio.file.Paths.get(s"$outDir/oof_report.txt"),

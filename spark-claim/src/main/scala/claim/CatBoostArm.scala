@@ -31,14 +31,16 @@ object CatBoostArm {
     "u_shape", "inv_cond", "age_range", "V", "cc", "x20", "x1", "x5",
     "max_g", "x14", "x17", "age8", "cond_low", "cond_miss",
     "w_safe750", "w_safe1750", "w_hot1950", "w_new50", "t3_num",
-    "v_r", "cc_r", "ushape_car10", "mono_car1"
+    "v_r", "cc_r", "ushape_car10", "mono_car1",
+    "claim_util", "deny", "anniv_dist", "dump_poor"
   )
 
   val NumAlt: Seq[String] = Seq(
     "days", "days_log", "condition_f", "cond_rk", "rate", "u_shape",
     "age_range", "V", "cc", "x20", "x1", "x5", "age8", "cond_low", "cond_miss",
     "w_safe750", "w_safe1750", "w_hot1950", "w_new50", "t3_num",
-    "ushape_car10", "mono_car1"
+    "ushape_car10", "mono_car1",
+    "claim_util", "deny", "anniv_dist"
   )
 
   /** Medium-card cats. NO src_cq_dq. */
@@ -103,6 +105,22 @@ object CatBoostArm {
       d = d.withColumn("w_safe750", ((col("days") >= 700.0 && col("days") < 880.0).cast(DoubleType)))
     if (!d.columns.contains("w_safe1750"))
       d = d.withColumn("w_safe1750", ((col("days") >= 1725.0 && col("days") < 1825.0).cast(DoubleType)))
+    if (!d.columns.contains("deny") && d.columns.contains("w_safe750") && d.columns.contains("w_safe1750"))
+      d = d.withColumn("deny", ((col("w_safe750") + col("w_safe1750")) > lit(0.5)).cast(DoubleType))
+    if (!d.columns.contains("claim_util") && d.columns.contains("rate") && d.columns.contains("deny"))
+      d = d.withColumn("claim_util", col("rate") * (lit(1.0) - col("deny")))
+    if (!d.columns.contains("dump_poor") && d.columns.contains("w_hot9370") && d.columns.contains("cond_rk"))
+      d = d.withColumn("dump_poor", col("w_hot9370") * (lit(1.0) - col("cond_rk")))
+    if (!d.columns.contains("anniv_dist") && d.columns.contains("days"))
+      d = d.withColumn(
+        "anniv_dist",
+        least(
+          abs(col("days") - lit(365.0)), abs(col("days") - lit(730.0)),
+          abs(col("days") - lit(1095.0)), abs(col("days") - lit(1460.0)),
+          abs(col("days") - lit(1825.0)), abs(col("days") - lit(2190.0)),
+          abs(col("days") - lit(2555.0)), abs(col("days") - lit(2920.0))
+        )
+      )
     d
   }
 

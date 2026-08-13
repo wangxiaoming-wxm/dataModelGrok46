@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
-"""Write submissions/submission.csv from the strongest available teacher parquet."""
+"""Write submissions/submission.csv from the strongest available teacher parquet.
+
+Applies the frozen insurer-vs-customer gate AFTER rank fusion.
+"""
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
 
-SUB = Path("/workspace/submissions")
-DATA = Path("/workspace/data")
+ROOT = Path("/workspace")
+SUB = ROOT / "submissions"
+DATA = ROOT / "data"
+sys.path.insert(0, str(ROOT / "analysis"))
+from insurer_gate import apply_gate  # noqa: E402
 
 
 def rank01(a: np.ndarray) -> np.ndarray:
@@ -29,6 +36,16 @@ def pick() -> tuple[pd.DataFrame, pd.DataFrame, str]:
 
 def main() -> None:
     oof, tes, tag = pick()
+    train = pd.read_csv(DATA / "train.csv", usecols=["id", "days"])
+    test = pd.read_csv(DATA / "test.csv", usecols=["id", "days"])
+    oof = oof.copy()
+    tes = tes.copy()
+    oof["id"] = oof["id"].astype(str)
+    tes["id"] = tes["id"].astype(str)
+    train["id"] = train["id"].astype(str)
+    test["id"] = test["id"].astype(str)
+    oof = oof.merge(train, on="id", how="left")
+    tes = tes.merge(test, on="id", how="left")
     y = oof["label"].to_numpy()
     r_m = rank01(oof["pred_cb_main"].to_numpy())
     r_a = rank01(oof["pred_cb_alt"].to_numpy())
@@ -37,14 +54,18 @@ def main() -> None:
     auc_w62 = float(roc_auc_score(y, w62))
     auc_mx = float(roc_auc_score(y, mx))
     use_max = auc_mx >= auc_w62
-    print(f"teacher={tag} oof_w62={auc_w62:.6f} oof_max2={auc_mx:.6f} selected={'max2' if use_max else 'w62'}")
+    base = mx if use_max else w62
+    gated = apply_gate(base, oof["days"].to_numpy())
+    auc_gated = float(roc_auc_score(y, gated))
+    print(
+        f"teacher={tag} oof_w62={auc_w62:.6f} oof_max2={auc_mx:.6f} "
+        f"oof_gated={auc_gated:.6f} selected={'max2' if use_max else 'w62'}+insurer_gate"
+    )
 
     tr_m = rank01(tes["pred_cb_main"].to_numpy())
     tr_a = rank01(tes["pred_cb_alt"].to_numpy())
     pred = np.maximum(tr_m, tr_a) if use_max else 0.62 * tr_m + 0.38 * tr_a
-    tes = tes.copy()
-    tes["id"] = tes["id"].astype(str)
-    tes["label"] = pred
+    tes["label"] = rank01(apply_gate(pred, tes["days"].to_numpy()))
     order = pd.read_csv(DATA / "test.csv", usecols=["id"])
     order["id"] = order["id"].astype(str)
     out = order.merge(tes[["id", "label"]], on="id", how="left")
@@ -59,9 +80,11 @@ def main() -> None:
         f"n_test={len(out)}\n"
         f"auc_w62={auc_w62:.6f}\n"
         f"auc_max2={auc_mx:.6f}\n"
-        f"selected={'cb_max2' if use_max else 'cb_w62'}\n"
-        f"auc_blend={auc_mx if use_max else auc_w62:.6f}\n"
-        f"note=Spark ML Scala pipeline consumes this teacher via CatBoostArm.joinTeacher / BlendApp\n"
+        f"auc_insurer_gate={auc_gated:.6f}\n"
+        f"selected={'cb_max2' if use_max else 'cb_w62'}+insurer_gate\n"
+        f"auc_blend={auc_gated:.6f}\n"
+        f"gate=zero[1725,1825) rank-0.10[700,880) rank+0.05[9370,9475); submit=rank01(gated)\n"
+        f"note=Spark ML Scala pipeline consumes teacher via CatBoostArm.joinTeacher / BlendApp\n"
     )
     (SUB / "oof_report_teacher.txt").write_text(report, encoding="utf-8")
     print(report)
