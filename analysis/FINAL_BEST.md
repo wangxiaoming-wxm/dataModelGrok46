@@ -4,20 +4,18 @@
 
 ## 当前提交（可交）
 
-`submissions/submission.csv`（备份 `submission_opus5_gated.csv`）
+`submissions/submission.csv`（备份 `submission_gauss_opus.csv`）
 
-- 主臂：**opus5 HONEST** 8-seed max2
-  - `merger_ord8`：v2 主帧 + Ordered Classifier Logloss，depth=5，固定 800 树，5 折 × 8 seed
-  - `v2_cat_alt8`：alt 世界 `rate=days*(1-rank(condition|source))`，Plain d6 l2=6
-  - 逐元素 max(rank) 融合，nested OOF **0.69993** / full **0.70023**
-- 多样性臂：本仓库 LightGBM RMSE 10 折，权重 **0.15**
-- 冻结四窗保司硬门后再 rank01
-- 本地 **gated OOF 0.70335**（nested 0.70056）
-- 纯 opus_max2 + 硬门：gated **0.70274**（nested 0.69993）
+- 主臂：**opus5 HONEST** 8-seed max2（`merger_ord8` Ordered Classifier + `v2_cat_alt8`），nested **0.69993**
+- 融合：Gaussian copula（借鉴 0.706 包的变换，不用其弱臂/ref 迁移）
+  `gauss(0.80 opus + 0.15 LGB + 0.05 VAL-ES 4seed)`
+- 冻结四窗硬门后再 rank01
+- 本地 **gated OOF 0.70456**（nested 0.70193）
+- 对照 `gauss(0.85 opus + 0.15 LGB)` gated 0.70398；纯 opus+硬门 0.70274
 
-口径：opus5 为 **HONEST_NO_ES**（无早停）。LGB 外折 ES 仅 15% 权重。禁止把 VAL-ES 数字写成 HONEST。
+口径：opus5 为 **HONEST_NO_ES**。LGB/VAL-ES 小权重略乐观，报告里须分开写。0.706 zip 本地 OOF 仅 0.694，线上 0.706 来自外部 ref，不采用。
 
-参考包：`analysis/opus5/`（20260810-curos-opus5）。
+参考：`analysis/opus5/`，`analysis/best706/NOTES.md`。
 
 ## 配方要点
 

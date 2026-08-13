@@ -1,17 +1,20 @@
 {
   "recipe": "opus5 HONEST 8-seed max2 (Classifier Logloss, no ES) + frozen 4-window gate",
-  "selected": "0.85opus+0.15lgb",
-  "auc_gated": 0.703354794961145,
-  "auc_nested": 0.700559513971653,
+  "selected": "gauss_0.80opus+0.15lgb+0.05vales",
+  "auc_gated": 0.7045578940496576,
+  "auc_nested": 0.7019299741497151,
   "opus_merger_auc": 0.6965958152313668,
   "opus_alt_auc": 0.6970387610970329,
   "teacher_tag": "max2",
   "teacher_ungated": 0.6920742047275689,
   "lgb_ungated": 0.6793506320064263,
   "cb_tag": "max2",
-  "cb_ungated": 0.6948976736335851,
+  "cb_ungated": 0.6952411532236429,
   "vales_seeds": [
-    2026
+    2026,
+    2036,
+    2046,
+    2056
   ],
   "n_test": 6398,
   "gate": "floor[1725,1825)+[2110,2210) -0.10[700,880) +0.05[9370,9475)",

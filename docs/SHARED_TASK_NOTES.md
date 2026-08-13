@@ -1,6 +1,6 @@
 # 共享任务笔记（主会话与子 agent 必读）
 
-更新时间: 2026-08-13（最强可提交：opus5 HONEST max2 ×0.85 + LGB×0.15 + 四窗硬门，gated OOF **0.70335**；见 `analysis/FINAL_BEST.md`）
+更新时间: 2026-08-13（最强可提交：gauss(0.80 opus + 0.15 LGB + 0.05 VAL-ES) + 四窗硬门，gated OOF **0.70456**；见 `analysis/FINAL_BEST.md`）
 
 ## 目标
 

@@ -19,6 +19,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from scipy.stats import norm
 from sklearn.metrics import roc_auc_score
 
 ROOT = Path("/workspace") if Path("/workspace/data/train.csv").is_file() else Path(__file__).resolve().parents[1]
@@ -51,6 +52,19 @@ def pick_cb_fuse(oof_m: np.ndarray, oof_a: np.ndarray, y: np.ndarray) -> tuple[n
 def apply_cb_fuse(te_m: np.ndarray, te_a: np.ndarray, tag: str) -> np.ndarray:
     r_m, r_a = rank01(te_m), rank01(te_a)
     return np.maximum(r_m, r_a) if tag == "max2" else 0.62 * r_m + 0.38 * r_a
+
+
+def gauss(a: np.ndarray) -> np.ndarray:
+    """Gaussian copula of a rank score. Borrowed from best_model_0.706 fusion, not their weights."""
+    r = np.clip(rank01(a), 1e-4, 1.0 - 1e-4)
+    return norm.ppf(r)
+
+
+def gauss_blend(parts: list[tuple[float, np.ndarray]]) -> np.ndarray:
+    s = np.zeros(len(parts[0][1]), dtype=np.float64)
+    for w, arr in parts:
+        s += w * gauss(arr)
+    return rank01(s)
 
 
 def nested_auc(oof: np.ndarray, y: np.ndarray, n_blocks: int = 5) -> float:
@@ -183,7 +197,35 @@ def main() -> None:
         # different CV protocols is not (cherry-picks fold luck).
         if cb_oof is not None:
             cands.append(("0.90opus+0.10vales", 0.90 * r_op + 0.10 * rank01(cb_oof), 0.90 * r_opt + 0.10 * rank01(cb_te)))
+            cands.append(
+                (
+                    "gauss_0.90opus+0.10vales",
+                    gauss_blend([(0.90, r_op), (0.10, rank01(cb_oof))]),
+                    gauss_blend([(0.90, r_opt), (0.10, rank01(cb_te))]),
+                )
+            )
         cands.append(("0.90opus+0.10teacher", 0.90 * r_op + 0.10 * rank01(tea_s), 0.90 * r_opt + 0.10 * rank01(tea_t)))
+        if lgb_oof is not None:
+            cands += [
+                (
+                    "gauss_0.85opus+0.15lgb",
+                    gauss_blend([(0.85, r_op), (0.15, lgb_oof)]),
+                    gauss_blend([(0.85, r_opt), (0.15, lgb_te)]),
+                ),
+                (
+                    "gauss_0.90opus+0.10lgb",
+                    gauss_blend([(0.90, r_op), (0.10, lgb_oof)]),
+                    gauss_blend([(0.90, r_opt), (0.10, lgb_te)]),
+                ),
+            ]
+            if cb_oof is not None:
+                cands.append(
+                    (
+                        "gauss_0.80opus+0.15lgb+0.05vales",
+                        gauss_blend([(0.80, r_op), (0.15, lgb_oof), (0.05, rank01(cb_oof))]),
+                        gauss_blend([(0.80, r_opt), (0.15, lgb_te), (0.05, rank01(cb_te))]),
+                    )
+                )
 
     scored = []
     for name, oof, tes in cands:
