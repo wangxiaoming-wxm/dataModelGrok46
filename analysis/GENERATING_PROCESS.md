@@ -210,7 +210,7 @@ Spark 可实现：数值、分箱、折内 TE 分数、GBT。高基数 `source|c
 8. **`pow_rate15 = days^{1.5} * (1-cond_rk)^{1.23}`**
 9. `u_shape=(cond_rk-0.5)^2`
 10. `ushape_car10 = u_shape * I(CAR_10)`，`mono_car1=(1-cond_rk)*I(CAR_1)`，`rev_car7=cond_rk*I(CAR_7)`
-11. 窗口：`I(days<50)`, `I(days∈[700,880])`, **`I(days∈[1725,1825])`**, `I(days∈[1950,2000])`, **`I(days∈[9370,9475])`**
+11. 窗口：`I(days<50)`, `I(days∈[700,880])`, **`I(days∈[1725,1825])`**, `I(days∈[1950,2000])`, **`I(days∈[2110,2210])`**, **`I(days∈[9370,9475])`**
 12. `I(age_range>=8)`, `I(condition_f<0.05)`, `cond_miss`
 13. 弱连续：`x20`, `V`, `cc`, `x1`, `x5`, `x14`, `x17`, `t3_num`（解析数字）
 
@@ -264,8 +264,40 @@ Spark 可实现：数值、分箱、折内 TE 分数、GBT。高基数 `source|c
 | max(8seed, full-2way-cats) ×0.80 + LGB | **0.69713**（相关 0.99，几乎无新信息） |
 | 全 2-way cats 2seed×3bag val-ES | max2 0.69509（23 cats，无增益） |
 
-历史 W62 本地 0.70159 使用 10-fold×8seed×3bag + 折上 ES + **80+ 手工类别交叉（约 121 列，arm2 rsm=0.3）**。我们用 ~14–23 cats 的 8-seed val-ES 停在 **0.696**。缺口 ~0.005 更像是缺交叉列，不是再多种子（多种子 Spearman≈0.97）。
+历史 W62 本地 0.70159 使用 10-fold×8seed×3bag + 折上 ES。我们用 23 个中基数类别的 8-seed val-ES 停在 **0.6968–0.6971**。
 
-Inner-ES 把同一套模型压到 0.692，说明 **0.70 数字对早停协议敏感约 +0.003～0.004**。生成过程数值特征进 CatBoost 无增益；高基数 3-way 当类别列无增益。
+Inner-ES 把同一套模型压到 0.692，说明 **0.70 对早停协议敏感约 +0.003～0.004**。
 
-要在 **Spark GBT** 上接近：同一套数值 + 中基数 TE/整数编码 + RMSE；不要把 `src|cond_q|days_q` 喂树。完整 0.70 需要对 **80+ 两两交叉** 做 Ordered boosting（CatBoostSpark）或把交叉做成折内 TE 分数再 GLM/融合。
+要在 **Spark GBT** 上接近：同一套数值 + 中基数 TE/整数编码 + RMSE；不要把 `src|cond_q|days_q` 喂树。完整 0.70 需要 Ordered boosting（CatBoostSpark）+ val-ES bagging。无 CatBoost 原生类别时便携融合停在 ~0.67。
+
+---
+
+## 9. 80+ 交叉重建（未打到 0.70 的负结果，有数字）
+
+把 13 个原子类别（source/region/age/grades/month/version/days_q5/cond_q/ratio_q/rate_q/t3_letter/win/x20_q）做成 **全部 78 个两两拼接 + 13 = 91 列**，对标「121 特征 + rsm=0.3」：
+
+| 表示 | 协议 | OOF |
+|---|---|---:|
+| 当前 23 cats，Ordered，默认 CTR complexity 4 | 5-fold val-ES 1seed | **0.68733** |
+| 同上 + t3_letter | 5-fold | 0.68855 |
+| 语义 32 cats，CTR=4 | 5-fold | 0.68357 |
+| 全部 91 cats，CTR complexity=1 | 5-fold | 0.66911 |
+| 仅 13 原子，CTR=4（让 CatBoost 自己组合） | 5-fold | 0.66794 |
+| 当前 23 cats，CTR=1 | 5-fold | 0.66846 |
+| 91-key LOO-TE + Ridge | 10-fold | 0.64708 |
+| 语义 32-key TE + Ridge | 10-fold | 0.65393 |
+| W62 CATS_W62(16)+v6 比值，双臂 | 5-fold val-ES | max2 0.68435 |
+| 无 ES、800 iter、8seed×1bag×10fold | 诚实 | w62 **0.68657** |
+| Langevin SGLB | 5-fold | 0.68791 |
+| t3 163 水平当类别 | 5-fold | 0.68789 |
+
+结论：
+
+1. **乱加全部两两交叉会掉 0.018**，不是 W62 的 80+ 配方。
+2. 显式中基数 2-way + **默认 CTR complexity=4** 才是对的；complexity=1 或只丢原子列都掉到 0.67。
+3. 无 early-stopping 的 800 轮比 val-ES 差 ~0.01。不要用 no-ES 数字当 0.70。
+4. 多种子/更多 2-way/t3/version/Langevin 的边际都 <0.002，臂间 Spearman≥0.99。
+
+额外确认的 days 窗（一半发现一半确认）：**[2110,2210] 全数据 n=142 率 0.028**（约 6×360=2160 附近）。与 [700,880]、[1725,1825] 一起做成指示列。360/365 全局周年距离 AUC 只有 0.51，**不是**全局周年生成器；只是几个具体坑。
+
+Spark：`concat_ws('|', source, cond_q)` 等中基数键；91 个全配对不要做。`I(days∈[2110,2210])` 与已有窗口并列。

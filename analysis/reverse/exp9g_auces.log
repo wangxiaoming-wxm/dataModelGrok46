@@ -1,0 +1,25 @@
+auces5 fold 0 A=0.6985 B=0.7006 it~447/490
+auces5 fold 1 A=0.6804 B=0.6763 it~358/298
+auces5 fold 2 A=0.6954 B=0.6943 it~434/286
+auces5 fold 3 A=0.6654 B=0.6740 it~370/576
+auces5 fold 4 A=0.7006 B=0.6968 it~565/425
+=== auces5 === {
+  "name": "auces5",
+  "max2": 0.6876651717368096,
+  "w62": 0.6886915552286121,
+  "A": 0.6875917786620108,
+  "B": 0.6870545164754764,
+  "dt": 161.90137767791748,
+  "eval_auc": true,
+  "n_folds": 5,
+  "n_bag": 1,
+  "n_seed": 1
+}
+candidate max(h,auces5) 0.69444 vs best 0.69681
+ps fold 0 g=0.7006 ps=0.7005
+ps fold 1 g=0.6801 ps=0.6841
+ps fold 2 g=0.6865 ps=0.6921
+ps fold 3 g=0.6638 ps=0.6641
+ps fold 4 g=0.7019 ps=0.7000
+=== persource === {'global_': 0.6856878627857006, 'persource': 0.6875018908046389, 'dt': 180.61280965805054}
+candidate max(h,ps) 0.69523 vs best 0.69681
