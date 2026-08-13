@@ -16,13 +16,13 @@ from catboost import CatBoostRegressor, Pool
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 
-sys.path.insert(0, "/workspace/analysis")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cb_features import CATS, NUM_ALT, NUM_MAIN, fold_features
 
 OUT = Path("/workspace/analysis/reverse")
 N_BAGS = 3
 N_SEEDS = 3
-SEEDS = [2026, 2036, 2046]
+SEEDS = [2026, 2036, 2046, 2056, 2066, 2076, 2086, 2096]
 THREADS = 4
 ITERS = 800
 
