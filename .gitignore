@@ -1,0 +1,9 @@
+spark-claim/target/
+spark-claim/project/target/
+spark-claim/project/project/
+*.npy
+*.pyc
+__pycache__/
+.idea/
+submissions/*_dir/
+.bsp/
