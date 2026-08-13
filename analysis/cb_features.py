@@ -187,6 +187,36 @@ CATS = [
     "reg_dq",
 ]
 
+# Reverse 23-col set that hit VAL_ES max2 0.69592. Still no src|cond_q|days_q.
+CATS_BEST = [
+    "source",
+    "region",
+    "age_range",
+    "grades",
+    "month",
+    "code",
+    "src_reg",
+    "src_age",
+    "reg_age",
+    "src_cq",
+    "days_q",
+    "cond_q",
+    "ratio_q",
+    "rate_q",
+    "src_dq",
+    "reg_cq",
+    "reg_dq",
+    "days_q5",
+    "src_dq5",
+    "src_ratioq",
+    "src_rateq",
+    "cq_dq",
+    "src_grades",
+]
+
+NUM_MAIN_BEST = NUM_MAIN + ["safe_2110"]
+NUM_ALT_BEST = NUM_ALT + ["safe_2110"]
+
 # W62 cats: days qcut=5, cond qcut=10, 2-way only. 16 columns.
 CATS_W62 = [
     "source",
@@ -323,8 +353,10 @@ def fold_features(
         df["cond_low"] = (df["condition_f"] < 0.05).astype(np.int8)
         df["safe_750"] = ((df["days"] >= 700) & (df["days"] < 880)).astype(np.int8)
         df["safe_1750"] = ((df["days"] >= 1725) & (df["days"] < 1825)).astype(np.int8)
+        df["safe_2110"] = ((df["days"] >= 2110) & (df["days"] < 2210)).astype(np.int8)
         df["safe_1950"] = ((df["days"] >= 1950) & (df["days"] < 2000)).astype(np.int8)
         df["w_9370"] = ((df["days"] >= 9370) & (df["days"] < 9475)).astype(np.int8)
+        df["w_hot9374"] = df["w_9370"]
         df["w_hot9370"] = df["w_9370"]
         df["days_lt50"] = (df["days"] < 50).astype(np.int8)
         cr = df["cond_r"].replace(0, np.nan)
@@ -338,6 +370,7 @@ def fold_features(
         car = df["source"].astype(str).str.split("|").str[0]
         b = car.map(B_S).fillna(0.5).astype(float)
         df["pow_ratio_s"] = df["days"] / np.power(df["condition_f"].clip(lower=1e-6), b)
+        df["pow_ratio"] = df["days"] / np.power(df["condition_f"].clip(lower=1e-6), 0.5)
         df["ushape_car10"] = df["u_shape"] * (car == "CAR_10").astype(np.int8)
         df["mono_car1"] = (1.0 - df["cond_rk"]) * (car == "CAR_1").astype(np.int8)
         df["rev_car7"] = df["cond_rk"] * (car == "CAR_7").astype(np.int8)
@@ -389,6 +422,9 @@ def fold_features(
         df["cq_dq"] = df["cond_q"] + "|" + df["days_q"]
         df["cq_dq5"] = df["cond_q"] + "|" + df["days_q5"]
         df["src_ratioq"] = df["source"] + "|" + df["ratio_q"]
+        df["src_rateq"] = df["source"] + "|" + df["rate_q"]
+        df["src_grades"] = df["source"] + "|" + df["grades"]
+        df["code"] = df["code"].astype(str)
         df["src_cq_dq"] = df["source"] + "|" + df["cond_q"] + "|" + df["days_q"]
         df["src_cq_dq5"] = df["source"] + "|" + df["cond_q"] + "|" + df["days_q5"]
     if tes is None:

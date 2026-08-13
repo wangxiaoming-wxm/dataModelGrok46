@@ -205,7 +205,7 @@ object CatBoostArm {
     ).map(new File(_)).filter(_.isDirectory).distinct
     // Pick the parquet pack with higher honest AUC. A 1-seed w62 file must not
     // override a stronger 3-bag teacher just because the filename exists.
-    val stems = Seq("cb_w62", "cb_teacher")
+    val stems = Seq("final_best", "cb_w62", "cb_teacher")
     var bestAuc = -1.0
     var bestTag = "none"
     var bestOof = Option.empty[File]
@@ -305,7 +305,7 @@ object CatBoostArm {
         val pat = raw""""$key"\s*:\s*([0-9.]+)""".r
         pat.findFirstMatchIn(txt).map(_.group(1).toDouble)
       }
-      grab("auc_cb_w62").orElse(grab("auc_blend")).orElse(grab("auc_cb_main")).getOrElse(0.0)
+      grab("auc_gated").orElse(grab("auc_cb_w62")).orElse(grab("auc_blend")).orElse(grab("auc_cb_main")).getOrElse(0.0)
     } catch {
       case _: Throwable => 0.0
     }

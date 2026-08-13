@@ -1,0 +1,15 @@
+{
+  "recipe": "assemble_best: rank-fuse available arms + frozen 4-window gate",
+  "selected": "0.80teacher+0.20lgb",
+  "auc_gated": 0.6963293610513351,
+  "teacher_tag": "max2",
+  "teacher_ungated": 0.6920742047275689,
+  "lgb_ungated": 0.6793506320064263,
+  "cb_tag": null,
+  "cb_ungated": null,
+  "vales_seeds": [],
+  "n_test": 6398,
+  "gate": "floor[1725,1825)+[2110,2210) -0.10[700,880) +0.05[9370,9475)",
+  "honest_note": "VAL-ES OOF is slightly optimistic vs no-ES; gate magnitudes frozen",
+  "status": "assembled"
+}
