@@ -110,9 +110,20 @@ def score_arms(df: pd.DataFrame, stats: dict) -> dict:
 
 
 def score(df: pd.DataFrame, stats: dict) -> np.ndarray:
-    """Rank-fuse closed arms. Ranking is within the scored batch (Spark percent_rank)."""
+    """Rank-fuse closed arms. Ranking is within the scored batch (Spark percent_rank).
+
+    This is the AUC / leaderboard score, not a Bernoulli probability.
+    Use score_prob() for an identity-link probability in [0, 1].
+    """
     parts = score_arms(df, stats)
     fused = fuse_rank(parts, stats.get("weights", CLOSED_WEIGHTS))
+    return np.clip(fused, 0.0, 1.0)
+
+
+def score_prob(df: pd.DataFrame, stats: dict) -> np.ndarray:
+    """Identity-link probability: weighted average of arm p, clipped to [0, 1]."""
+    parts = score_arms(df, stats)
+    fused = fuse_linear(parts, stats.get("weights", CLOSED_WEIGHTS))
     return np.clip(fused, 0.0, 1.0)
 
 
