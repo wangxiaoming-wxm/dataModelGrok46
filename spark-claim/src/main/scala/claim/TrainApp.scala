@@ -111,71 +111,61 @@ object TrainApp {
       reportBuf.append(s"pick_te_${k}_m=${best.toInt}\n")
     }
 
-    var ranked = oof
-    val rankSources = Seq(
-      "pred_main", "pred_alt", "pred_rf", "pred_lr", "pred_fm", "pred_big", "te_pool",
-      "pred_cb_main", "pred_cb_alt"
-    ) ++ FeatureEngine.TeKeys.map(k => TargetEncode.colName(k, bestM(k)))
-    rankSources.distinct.filter(ranked.columns.contains).foreach { c =>
-      ranked = withPercentRank(ranked, c, "r__" + c)
-    }
-    ranked = ranked.cache()
-    ranked.count()
+    val te3 = TargetEncode.colName("src_cq_dq", bestM("src_cq_dq"))
+    val teCq = TargetEncode.colName("cq_dq", bestM("cq_dq"))
+    val teRq = TargetEncode.colName("src_ratioq", bestM("src_ratioq"))
+    val teSrcCq = TargetEncode.colName("src_cq", bestM("src_cq"))
 
     val recipes = Seq(
       "w62" -> Map("pred_main" -> 0.62, "pred_alt" -> 0.38),
       "equal_gbt" -> Map("pred_main" -> 0.5, "pred_alt" -> 0.5),
       "classic6" -> Map(
         "pred_main" -> 0.34, "pred_alt" -> 0.22, "pred_rf" -> 0.10,
-        TargetEncode.colName("src_cq_dq", bestM("src_cq_dq")) -> 0.16,
-        TargetEncode.colName("cq_dq", bestM("cq_dq")) -> 0.08,
-        TargetEncode.colName("src_ratioq", bestM("src_ratioq")) -> 0.10
+        te3 -> 0.16, teCq -> 0.08, teRq -> 0.10
       ),
       "equal_core" -> Map(
         "pred_main" -> 1.0, "pred_alt" -> 1.0, "pred_rf" -> 1.0,
-        TargetEncode.colName("src_cq_dq", bestM("src_cq_dq")) -> 1.0,
-        TargetEncode.colName("cq_dq", bestM("cq_dq")) -> 1.0,
-        TargetEncode.colName("src_ratioq", bestM("src_ratioq")) -> 1.0
+        te3 -> 1.0, teCq -> 1.0, teRq -> 1.0
       ),
       "with_glm" -> Map(
         "pred_main" -> 0.28, "pred_alt" -> 0.18, "pred_rf" -> 0.08,
         "pred_lr" -> 0.12, "pred_fm" -> 0.08,
-        TargetEncode.colName("src_cq_dq", bestM("src_cq_dq")) -> 0.14,
-        TargetEncode.colName("cq_dq", bestM("cq_dq")) -> 0.06,
-        TargetEncode.colName("src_ratioq", bestM("src_ratioq")) -> 0.06
+        te3 -> 0.14, teCq -> 0.06, teRq -> 0.06
       ),
       "glm_te" -> Map(
         "pred_main" -> 0.30, "pred_alt" -> 0.18,
         "pred_lr" -> 0.14, "pred_fm" -> 0.08,
-        TargetEncode.colName("src_cq_dq", bestM("src_cq_dq")) -> 0.14,
-        TargetEncode.colName("cq_dq", bestM("cq_dq")) -> 0.08,
-        TargetEncode.colName("src_ratioq", bestM("src_ratioq")) -> 0.08
+        te3 -> 0.14, teCq -> 0.08, teRq -> 0.08
       ),
       "te_pool_w" -> Map(
-        "pred_main" -> 0.32, "pred_alt" -> 0.20, "pred_rf" -> 0.08,
-        "te_pool" -> 0.22, "pred_lr" -> 0.10, "pred_big" -> 0.08
+        "pred_main" -> 0.22, "pred_alt" -> 0.10, "pred_rf" -> 0.18,
+        "te_pool" -> 0.28, "pred_lr" -> 0.22
       ),
+      "lr_rf_te" -> Map("pred_lr" -> 0.40, "pred_rf" -> 0.25, "te_pool" -> 0.35),
+      "lr_te_fm" -> Map("pred_lr" -> 0.36, "te_pool" -> 0.28, "pred_fm" -> 0.12, "pred_rf" -> 0.24),
       "shape" -> Map(
         "pred_main" -> 0.30, "pred_alt" -> 0.18, "pred_lr" -> 0.10,
-        TargetEncode.colName("src_cq", bestM("src_cq")) -> 0.14,
-        TargetEncode.colName("src_cq_dq", bestM("src_cq_dq")) -> 0.16,
-        TargetEncode.colName("cq_dq", bestM("cq_dq")) -> 0.12
+        teSrcCq -> 0.14, te3 -> 0.16, teCq -> 0.12
       ),
       "cb_w62" -> Map("pred_cb_main" -> 0.62, "pred_cb_alt" -> 0.38),
       "cb_te" -> Map(
         "pred_cb_main" -> 0.40, "pred_cb_alt" -> 0.24, "pred_main" -> 0.08,
-        TargetEncode.colName("src_cq_dq", bestM("src_cq_dq")) -> 0.14,
-        TargetEncode.colName("cq_dq", bestM("cq_dq")) -> 0.08,
-        TargetEncode.colName("src_ratioq", bestM("src_ratioq")) -> 0.06
+        te3 -> 0.14, teCq -> 0.08, teRq -> 0.06
       ),
       "cb_max" -> Map(
         "pred_cb_main" -> 0.32, "pred_cb_alt" -> 0.20,
         "pred_main" -> 0.10, "pred_alt" -> 0.08, "pred_rf" -> 0.04,
-        TargetEncode.colName("src_cq_dq", bestM("src_cq_dq")) -> 0.14,
-        TargetEncode.colName("cq_dq", bestM("cq_dq")) -> 0.06,
-        TargetEncode.colName("src_ratioq", bestM("src_ratioq")) -> 0.06
+        te3 -> 0.14, teCq -> 0.06, teRq -> 0.06
+      ),
+      "all_strong" -> Map(
+        "pred_lr" -> 0.22, "pred_rf" -> 0.18, "te_pool" -> 0.22,
+        "pred_main" -> 0.12, "pred_fm" -> 0.10, te3 -> 0.16
       )
     )
+
+    val rankSources = recipes.flatMap(_._2.keys).distinct.filter(oof.columns.contains)
+    val ranked = addRanks(oof, rankSources).cache()
+    ranked.count()
 
     var bestName = "classic6"
     var bestBlend = 0.0
@@ -193,34 +183,6 @@ object TrainApp {
     println(f"[OOF] selected $bestName=$bestBlend%.5f")
     reportBuf.append(s"selected=$bestName\n")
     reportBuf.append(f"auc_blend=$bestBlend%.5f%n")
-
-    println("[info] fitting full-data models")
-    val fullScored = scoreSplit(
-      trainRaw,
-      testRaw.withColumn("label", lit(0.0)),
-      nBags, gbtIter, rfTrees, teMs,
-      withTrainMain = true
-    )
-    var testRanked = fullScored
-    rankSources.distinct.filter(testRanked.columns.contains).foreach { c =>
-      testRanked = withPercentRank(testRanked, c, "r__" + c)
-    }
-    testRanked = applyBlend(testRanked, bestWeights).withColumnRenamed("blend", "label")
-
-    val predMap = testRanked.select("id", "label").collect().map { r =>
-      r.getString(0) -> (if (r.isNullAt(1) || r.getDouble(1).isNaN) 0.5 else r.getDouble(1))
-    }.toMap
-    new File(outDir).mkdirs()
-    val outPath = s"$outDir/submission.csv"
-    val pw = new PrintWriter(new File(outPath), StandardCharsets.UTF_8.name())
-    try {
-      pw.println("id,label")
-      testIds.foreach { id =>
-        val v = predMap.getOrElse(id, 0.5)
-        pw.println(f"$id,$v%.10f")
-      }
-    } finally pw.close()
-    println(s"[info] wrote $outPath rows=${testIds.length} mapped=${predMap.size}")
 
     val header =
       s"""sparkml_oof
@@ -242,8 +204,33 @@ object TrainApp {
          |auc_blend=$bestBlend
          |""".stripMargin
     val report = header + reportBuf.toString
+    new File(outDir).mkdirs()
     java.nio.file.Files.write(java.nio.file.Paths.get(s"$outDir/oof_report.txt"), report.getBytes(StandardCharsets.UTF_8))
     println(report)
+
+    println("[info] fitting full-data models")
+    val fullScored = scoreSplit(
+      trainRaw,
+      testRaw.withColumn("label", lit(0.0)),
+      nBags, gbtIter, rfTrees, teMs,
+      withTrainMain = true
+    )
+    val needRanks = bestWeights.keys.toSeq.filter(fullScored.columns.contains)
+    val testRanked = addRanks(fullScored, needRanks)
+    val blendedTest = applyBlend(testRanked, bestWeights)
+    val predMap = blendedTest.select(col("id"), col("blend")).collect().map { r =>
+      r.getString(0) -> (if (r.isNullAt(1) || r.getDouble(1).isNaN) 0.5 else r.getDouble(1))
+    }.toMap
+    val outPath = s"$outDir/submission.csv"
+    val pw = new PrintWriter(new File(outPath), StandardCharsets.UTF_8.name())
+    try {
+      pw.println("id,label")
+      testIds.foreach { id =>
+        val v = predMap.getOrElse(id, 0.5)
+        pw.println(f"$id,$v%.10f")
+      }
+    } finally pw.close()
+    println(s"[info] wrote $outPath rows=${testIds.length} mapped=${predMap.size}")
     spark.stop()
   }
 
@@ -335,9 +322,7 @@ object TrainApp {
   def auc(df: DataFrame, label: String, pred: String): Double = {
     val pairs = df.select(col(label).cast(DoubleType), col(pred).cast(DoubleType)).collect().map { r =>
       val y = if (r.isNullAt(0)) 0.0 else r.getDouble(0)
-      val p =
-        if (r.isNullAt(1)) Double.NaN
-        else r.getDouble(1)
+      val p = if (r.isNullAt(1)) Double.NaN else r.getDouble(1)
       (y, p)
     }
     val pos = pairs.filter(_._1 > 0.5).map(_._2).filter(p => !p.isNaN && !p.isInfinity)
@@ -366,22 +351,33 @@ object TrainApp {
   }
 
   /**
-   * Average-rank percent in [0,1] computed on the driver for the given dataframe only.
-   * Test ranks are computed on test scores alone (not mixed with OOF) — correct for rank fusion.
+   * Average-rank percent in [0,1] on the driver for this dataframe only.
+   * Test ranks are computed on test scores alone — correct for rank fusion.
+   * All columns ranked in one collect/join to avoid Spark join-lineage blow-ups.
    */
-  def withPercentRank(df: DataFrame, inCol: String, outCol: String): DataFrame = {
+  def addRanks(df: DataFrame, cols: Seq[String]): DataFrame = {
+    val use = cols.filter(df.columns.contains).distinct
+    if (use.isEmpty) return df
     val spark = df.sparkSession
-    val recs = df.select(col("id").cast(StringType), col(inCol).cast(DoubleType)).collect()
-    val n = recs.length
-    val vals = recs.map { r =>
-      if (r.isNullAt(1)) Double.NaN else r.getDouble(1)
+    val recs = df.select((col("id").cast(StringType) +: use.map(c => col(c).cast(DoubleType))): _*).collect()
+    val ids = recs.map(_.getString(0))
+    val rankMat = use.indices.map { j =>
+      val vals = recs.map { r => if (r.isNullAt(j + 1)) Double.NaN else r.getDouble(j + 1) }
+      percentRanks(vals)
     }
-    val ranks = percentRanks(vals)
-    val schema = StructType(Seq(StructField("id", StringType, nullable = false), StructField(outCol, DoubleType, nullable = false)))
-    val rows = recs.indices.map { i => Row(recs(i).getString(0), ranks(i)) }
+    val schema = StructType(
+      StructField("id", StringType, nullable = false) +:
+        use.map(c => StructField("r__" + c, DoubleType, nullable = false))
+    )
+    val rows = ids.indices.map { i =>
+      Row.fromSeq(ids(i) +: rankMat.map(a => a(i).asInstanceOf[Any]))
+    }
     val rankDf = spark.createDataFrame(spark.sparkContext.parallelize(rows, 1), schema)
     df.join(rankDf, Seq("id"))
   }
+
+  def withPercentRank(df: DataFrame, inCol: String, outCol: String): DataFrame =
+    addRanks(df, Seq(inCol)).withColumnRenamed("r__" + inCol, outCol)
 
   def percentRanks(values: Array[Double]): Array[Double] = {
     val n = values.length
