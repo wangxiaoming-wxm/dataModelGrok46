@@ -179,11 +179,13 @@ clone 后本地：`data/train.csv`（14930×45，正例率 0.1002）、`data/tes
 | 模型 | 协议 | AUC |
 |---|---|---|
 | 历史 W62 8seed×3bag | HONEST | 0.70159 / 线上 0.71503 |
-| teacher 10fold×3bag×1seed + 硬门 | HONEST | **0.69353**（当前提交） |
+| teacher 10fold×3bag×1seed + 硬门 | HONEST | **0.69353**（当前提交，仍用这个） |
 | teacher max2 无硬门 | inner 12% ES | 0.69207 |
+| exp8h 8seed×3bag ⊕ LGB | VAL_ES | **0.69713**（略乐观，不作提交） |
 | exp8h 8seed×3bag | VAL_ES | w62 0.69580 / max2 0.69592 |
 | exp8j 23 类 2seed | VAL_ES | max2 0.69509 |
-| 1seed×1bag HONEST w62 parquet | HONEST | ~0.683（弱于 teacher，勿选） |
+| RUN4 richb2 8seed×2bag | HONEST | **0.68863**（已入库 `cb_w62_*.parquet`，弱于 teacher，勿选） |
+| 8seed×1bag HONEST | HONEST | 0.6860–0.6867 |
 | 便携无树 / +GBT | — | 0.6705 / 0.6822 |
 
 ---
@@ -203,3 +205,11 @@ clone 后本地：`data/train.csv`（14930×45，正例率 0.1002）、`data/tes
 ## 11. 跑完后
 
 把 HONEST 分数、VAL_ES 分数、用了哪组表示/超参、新的 parquet 路径写进本文件末尾，并推回 `testsb` 或新分支。
+
+### 2026-08-13 本机结案（1 核）
+
+- HONEST RUN4：8seed × 2bag × 10fold × 800 RMSE，无 inner ES → **auc_cb_w62=0.68863**。再加 seed 几乎不涨。未达 0.700。
+- 产物：`submissions/cb_w62_{oof,test}.parquet`、`cb_w62_metrics.json`、`cb_oof_report.txt`。
+- 选包：按诚实 AUC，继续用 teacher max2 + 硬门提交（0.69353）。禁止用这份 w62 覆盖 teacher。
+- VAL_ES 对照上限 0.69713（OOF 折 ES + LGB），不能当 HONEST 上报。
+- 80 交叉 / 3-way / Lossguide / 更深 Plain / 分车型 CB：均未超过该对照。下一步仍需 **≥8 核** 上的 HONEST 8seed×3bag，或对齐历史 FeatureBuilder 的中基数交叉，而不是再堆 1 核 2bag。

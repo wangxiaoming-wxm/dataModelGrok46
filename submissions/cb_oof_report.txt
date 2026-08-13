@@ -1,0 +1,87 @@
+cb_oof_report
+backend=python_catboost_1.2.10_w62_full
+loss=RMSE
+inner_es=False
+nfold=10
+best_run=run4_richb2  8seed x 2bag x 800iter  Ordered d5 l2=10 + Plain d6 l2=6 rsm=0.3 subsample=0.8
+auc_cb_main=0.688693
+auc_cb_alt=0.686963
+auc_cb_w62=0.688627
+honest=True
+target_oof=0.700
+historical_w62_oof=0.70159
+hit_0.700=NO
+teacher_es_10fold_3bag_1seed_auc_w62=0.691069
+run1_8seed_1bag_bc128=0.686017
+run2_8seed_1bag_defaults=0.686711
+run3_8seed_1bag_gennums=0.686574
+run4_8seed_2bag_rich=0.688627
+cats=16 medium 2-way, no src|cond_q|days_q
+spark_hook=CatBoostArm.joinTeacher prefers cb_w62_* then cb_teacher_*
+artifacts=/workspace/submissions/cb_w62_oof.parquet,/workspace/submissions/cb_w62_test.parquet,/workspace/submissions/cb_w62_metrics.json
+note=8-seed 1-bag plateau ~0.686; 2 bags +0.002. Gap to 0.701 is not more seeds.
+
+
+
+=== W62 full (no inner ES) 2026-08-13 05:22:15 ===
+nfold=10 bags=1 seeds=[2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033] iters=800
+auc_cb_main=0.686088
+auc_cb_alt=0.683968
+auc_cb_w62=0.686017   blend=0.62*rank(main)+0.38*rank(alt)
+inner_es=False  honest=True  n_cats=16
+  seed 2026: blend=0.683309 main=0.681655 alt=0.680728
+  seed 2027: blend=0.683767 main=0.682525 alt=0.680450
+  seed 2028: blend=0.684632 main=0.682676 alt=0.682742
+  seed 2029: blend=0.682956 main=0.681225 alt=0.680506
+  seed 2030: blend=0.686402 main=0.684670 alt=0.683819
+  seed 2031: blend=0.681937 main=0.679008 alt=0.681412
+  seed 2032: blend=0.684896 main=0.682909 alt=0.682872
+  seed 2033: blend=0.685963 main=0.685184 alt=0.681554
+
+
+=== W62 full (no inner ES) 2026-08-13 06:21:45 ===
+nfold=10 bags=1 seeds=[2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033] iters=800
+auc_cb_main=0.687149
+auc_cb_alt=0.684084
+auc_cb_w62=0.686711   blend=0.62*rank(main)+0.38*rank(alt)
+inner_es=False  honest=True  n_cats=16
+  seed 2026: blend=0.683987 main=0.682576 alt=0.680807
+  seed 2027: blend=0.686262 main=0.684377 alt=0.683785
+  seed 2028: blend=0.684390 main=0.682775 alt=0.681916
+  seed 2029: blend=0.684247 main=0.682911 alt=0.681190
+  seed 2030: blend=0.686307 main=0.685749 alt=0.681460
+  seed 2031: blend=0.683322 main=0.681197 alt=0.681468
+  seed 2032: blend=0.684596 main=0.682919 alt=0.682224
+  seed 2033: blend=0.685523 main=0.684377 alt=0.681849
+
+
+=== W62 full (no inner ES) 2026-08-13 06:51:15 ===
+nfold=10 bags=1 seeds=[2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033] iters=800
+auc_cb_main=0.686587
+auc_cb_alt=0.684828
+auc_cb_w62=0.686574   blend=0.62*rank(main)+0.38*rank(alt)
+inner_es=False  honest=True  n_cats=16
+  seed 2026: blend=0.684575 main=0.682617 alt=0.682460
+  seed 2027: blend=0.684208 main=0.682008 alt=0.682664
+  seed 2028: blend=0.684084 main=0.681915 alt=0.682704
+  seed 2029: blend=0.684358 main=0.682240 alt=0.682690
+  seed 2030: blend=0.687244 main=0.685462 alt=0.684678
+  seed 2031: blend=0.683917 main=0.681910 alt=0.682060
+  seed 2032: blend=0.684452 main=0.682184 alt=0.682733
+  seed 2033: blend=0.685198 main=0.684251 alt=0.681495
+
+
+=== W62 full (no inner ES) 2026-08-13 07:54:01 ===
+nfold=10 bags=2 seeds=[2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033] iters=800
+auc_cb_main=0.688693
+auc_cb_alt=0.686963
+auc_cb_w62=0.688627   blend=0.62*rank(main)+0.38*rank(alt)
+inner_es=False  honest=True  n_cats=16
+  seed 2026: blend=0.687340 main=0.685817 alt=0.686461
+  seed 2027: blend=0.687162 main=0.686218 alt=0.685266
+  seed 2028: blend=0.688423 main=0.687698 alt=0.686194
+  seed 2029: blend=0.686830 main=0.686082 alt=0.684705
+  seed 2030: blend=0.688794 main=0.688339 alt=0.686079
+  seed 2031: blend=0.687295 main=0.685862 alt=0.686135
+  seed 2032: blend=0.687731 main=0.686303 alt=0.686627
+  seed 2033: blend=0.688184 main=0.688014 alt=0.685002
