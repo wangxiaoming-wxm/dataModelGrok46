@@ -38,9 +38,12 @@ AUC 冲击前三：第3名 **0.72384**，第2 **0.72515**，第1 **0.74952**。
 
 ## 子 agent 分工（禁止互相覆盖核心文件时不先读）
 
-- **reverse-engineer**：只写 `analysis/`，冲击诚实 OOF≥0.70 的新表示。
-- **spark-runner**：让 `spark-claim` 编译跑通，产出 submission，修 bug。
-- **catboost-arm**：新增 `CatBoostSpark.scala`（Spark ML Estimator），不要拆掉 GBT 臂，做 rank 融合。
+**禁止 `git checkout` / `git switch` / `git reset --hard`。** 共享工作区切分支会毁掉正在跑的 Spark 工程。
+
+- **reverse-engineer**：只写 `analysis/reverse/` 与 `analysis/GENERATING_PROCESS.md`。
+- **spark-runner**：只改 `spark-claim/`。不要同时跑两个 sbt。不要改坏 `bucketize`。
+- **catboost-arm / W62**：`analysis/cb_w62_full.py` + parquet；不要杀别人的 python。
+- **genfunc**：只写 `analysis/genfunc/`。
 
 ## 停止条件
 

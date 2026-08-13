@@ -8,18 +8,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-B_S = {
-    "CAR_1": 1.5,
-    "CAR_10": 1.2,
-    "CAR_0": 0.3,
-    "CAR_2": 0.4,
-    "CAR_5": 0.1,
-    "CAR_7": 0.1,
-    "CAR_9": 0.1,
-    "CAR_4": 0.8,
-    "CAR_6": 0.8,
-}
-
 NUM_MAIN = [
     "days",
     "days_log",
@@ -44,19 +32,8 @@ NUM_MAIN = [
     "safe_1750",
     "safe_1950",
     "days_lt50",
-    "w_hot9370",
     "t3_num",
     "cond_miss",
-    "v_r",
-    "cc_r",
-    "maxg_r",
-    "x14_r",
-    "x17_r",
-    "pow_ratio_s",
-    "pow_rate15",
-    "ushape_car10",
-    "mono_car1",
-    "rev_car7",
 ]
 
 NUM_ALT = [
@@ -65,7 +42,6 @@ NUM_ALT = [
     "condition_f",
     "cond_rk",
     "rate",
-    "pow_rate15",
     "u_shape",
     "age_num",
     "V",
@@ -78,66 +54,6 @@ NUM_ALT = [
     "safe_750",
     "safe_1750",
     "safe_1950",
-    "w_9370",
-    "days_lt50",
-    "t3_num",
-    "cond_miss",
-]
-
-# W62 numeric: dual-world + v6 ratios + power-rate + windows. No x18/x19/id.
-NUM_MAIN_W62 = [
-    "days",
-    "days_log",
-    "condition_f",
-    "cond_r",
-    "ratio",
-    "ratio_sqrt",
-    "u_shape",
-    "inv_cond",
-    "age_num",
-    "V",
-    "cc",
-    "x20",
-    "x1",
-    "x5",
-    "max_g",
-    "x14",
-    "x17",
-    "v_r",
-    "cc_r",
-    "maxg_r",
-    "x14_r",
-    "x17_r",
-    "pow_rate15",
-    "age8",
-    "cond_low",
-    "safe_750",
-    "safe_1750",
-    "w_9370",
-    "days_lt50",
-    "t3_num",
-    "cond_miss",
-]
-
-NUM_ALT_W62 = [
-    "days",
-    "days_log",
-    "condition_f",
-    "cond_rk",
-    "rate",
-    "pow_rate15",
-    "u_shape",
-    "age_num",
-    "V",
-    "cc",
-    "x20",
-    "x1",
-    "x5",
-    "age8",
-    "cond_low",
-    "safe_750",
-    "safe_1750",
-    "w_9370",
     "days_lt50",
     "t3_num",
     "cond_miss",
@@ -161,33 +77,7 @@ CATS = [
     "reg_dq",
 ]
 
-# W62 cats: days qcut=5, cond qcut=10, 2-way only. 16 columns.
-CATS_W62 = [
-    "source",
-    "region",
-    "age_range",
-    "grades",
-    "month",
-    "days_q5",
-    "cond_q10",
-    "ratio_q",
-    "src_reg",
-    "src_age",
-    "reg_age",
-    "src_cq",
-    "src_dq5",
-    "reg_cq",
-    "reg_dq",
-    "src_ratioq",
-]
-
-HIGH_TE_KEYS = ["src_cq_dq5", "cq_dq5", "src_ratioq", "src_cq_dq"]
-
-
-def load_raw() -> tuple[pd.DataFrame, pd.DataFrame]:
-    train = pd.read_csv("/workspace/data/train.csv")
-    test = pd.read_csv("/workspace/data/test.csv")
-    return train, test
+HIGH_TE_KEYS = ["src_cq_dq", "cq_dq", "src_ratioq"]
 
 
 def enrich(df: pd.DataFrame) -> pd.DataFrame:
@@ -266,31 +156,12 @@ def fold_features(trn: pd.DataFrame, val: pd.DataFrame) -> tuple[pd.DataFrame, p
         df["safe_750"] = ((df["days"] >= 700) & (df["days"] < 880)).astype(np.int8)
         df["safe_1750"] = ((df["days"] >= 1725) & (df["days"] < 1825)).astype(np.int8)
         df["safe_1950"] = ((df["days"] >= 1950) & (df["days"] < 2000)).astype(np.int8)
-        df["w_9370"] = ((df["days"] >= 9370) & (df["days"] < 9475)).astype(np.int8)
-        df["w_hot9370"] = df["w_9370"]
         df["days_lt50"] = (df["days"] < 50).astype(np.int8)
-        cr = df["cond_r"].replace(0, np.nan)
-        df["v_r"] = df["V"] / cr
-        df["cc_r"] = df["cc"] / cr
-        df["maxg_r"] = df["max_g"] / cr
-        df["x14_r"] = df["x14"] / cr
-        df["x17_r"] = df["x17"] / cr
-        rk = df["cond_rk"].clip(0.0, 1.0)
-        df["pow_rate15"] = np.power(df["days"].clip(lower=0.0), 1.5) * np.power((1.0 - rk).clip(lower=0.0), 1.23)
-        car = df["source"].astype(str).str.split("|").str[0]
-        b = car.map(B_S).fillna(0.5).astype(float)
-        df["pow_ratio_s"] = df["days"] / np.power(df["condition_f"].clip(lower=1e-6), b)
-        df["ushape_car10"] = df["u_shape"] * (car == "CAR_10").astype(np.int8)
-        df["mono_car1"] = (1.0 - df["cond_rk"]) * (car == "CAR_1").astype(np.int8)
-        df["rev_car7"] = df["cond_rk"] * (car == "CAR_7").astype(np.int8)
 
-    trn["days_q"], val["days_q"] = _qcut_apply(trn["days"], val["days"], q=10)
-    trn["days_q5"], val["days_q5"] = _qcut_apply(trn["days"], val["days"], q=5)
-    trn["cond_q"], val["cond_q"] = _qcut_apply(trn["condition_f"], val["condition_f"], q=10)
-    trn["ratio_q"], val["ratio_q"] = _qcut_apply(trn["ratio"], val["ratio"], q=10)
-    trn["rate_q"], val["rate_q"] = _qcut_apply(trn["rate"], val["rate"], q=10)
-    trn["cond_q10"] = trn["cond_q"]
-    val["cond_q10"] = val["cond_q"]
+    trn["days_q"], val["days_q"] = _qcut_apply(trn["days"], val["days"])
+    trn["cond_q"], val["cond_q"] = _qcut_apply(trn["condition_f"], val["condition_f"])
+    trn["ratio_q"], val["ratio_q"] = _qcut_apply(trn["ratio"], val["ratio"])
+    trn["rate_q"], val["rate_q"] = _qcut_apply(trn["rate"], val["rate"])
 
     for df in (trn, val):
         df["source"] = df["source"].astype(str)
@@ -303,14 +174,11 @@ def fold_features(trn: pd.DataFrame, val: pd.DataFrame) -> tuple[pd.DataFrame, p
         df["reg_age"] = df["region"] + "|" + df["age_range"]
         df["src_cq"] = df["source"] + "|" + df["cond_q"]
         df["src_dq"] = df["source"] + "|" + df["days_q"]
-        df["src_dq5"] = df["source"] + "|" + df["days_q5"]
         df["reg_cq"] = df["region"] + "|" + df["cond_q"]
-        df["reg_dq"] = df["region"] + "|" + df["days_q5"]
+        df["reg_dq"] = df["region"] + "|" + df["days_q"]
         df["cq_dq"] = df["cond_q"] + "|" + df["days_q"]
-        df["cq_dq5"] = df["cond_q"] + "|" + df["days_q5"]
         df["src_ratioq"] = df["source"] + "|" + df["ratio_q"]
         df["src_cq_dq"] = df["source"] + "|" + df["cond_q"] + "|" + df["days_q"]
-        df["src_cq_dq5"] = df["source"] + "|" + df["cond_q"] + "|" + df["days_q5"]
     return trn, val
 
 

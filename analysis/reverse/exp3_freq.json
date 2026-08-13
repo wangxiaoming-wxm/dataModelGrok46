@@ -1,0 +1,7 @@
+{
+  "additive_ridge": 0.6591392738832509,
+  "lpm_ridge": 0.6595967988478431,
+  "multiplicative_als": 0.6427571932179424,
+  "formula_add": "p = clip( f_s(days)+g_s(cond_rk)+h(region)+c*age+d*windows , 0,1) via Ridge RMSE",
+  "formula_mul": "p = clip( a_s * f(days) * g_s(cond_rk) + b_region + c*age + d*windows , 0,1) ALS RMSE"
+}

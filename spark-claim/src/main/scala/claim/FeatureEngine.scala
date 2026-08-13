@@ -16,9 +16,10 @@ object FeatureEngine {
     "age8", "cond_low", "cond_miss",
     "w_safe750", "w_safe1750", "w_hot1950", "w_new50",
     "t3_num", "max_g", "x14", "x17",
-    "v_r", "cc_r", "maxg_r",
+    "v_r", "cc_r", "maxg_r", "x14_r", "x17_r",
     "cond_z", "days_z",
-    "ushape_car10", "mono_car1", "rev_car7"
+    "ushape_car10", "mono_car1", "rev_car7",
+    "pow_ratio_s", "pow_rate15", "w_hot9370"
   )
 
   val NumericAlt: Seq[String] = Seq(
@@ -28,24 +29,26 @@ object FeatureEngine {
     "age8", "cond_low", "cond_miss",
     "w_safe750", "w_safe1750", "w_hot1950", "w_new50",
     "t3_num", "days_z", "cond_z",
-    "ushape_car10", "mono_car1", "rev_car7"
+    "ushape_car10", "mono_car1", "rev_car7",
+    "pow_ratio_s", "pow_rate15", "w_hot9370"
   )
 
   val NumericBig: Seq[String] = Seq(
     "days", "days_log", "condition_f", "cond_r", "cond_rk",
     "ratio", "rate", "u_shape", "age_range", "inv_cond",
-    "ushape_car10", "mono_car1", "days_z", "cond_z"
+    "ushape_car10", "mono_car1", "days_z", "cond_z",
+    "pow_ratio_s", "pow_rate15", "w_hot9370"
   )
 
   val AllNumeric: Seq[String] = (NumericMain ++ NumericAlt ++ NumericBig).distinct
 
   /** Low-card cats for trees. Do NOT include high-card crosses (those are TE scores only). */
   val LowCardCatsMain: Seq[String] = Seq(
-    "src", "reg", "age", "days_q", "cond_q", "ratio_q", "grades_s", "month_s"
+    "src", "reg", "age", "days_q", "days_q5", "cond_q", "ratio_q", "grades_s", "month_s"
   )
 
   val LowCardCatsAlt: Seq[String] = Seq(
-    "src", "reg", "age", "days_q", "cond_q", "rate_q", "grades_s", "month_s"
+    "src", "reg", "age", "days_q", "days_q5", "cond_q", "rate_q", "grades_s", "month_s"
   )
 
   val LowCardCats: Seq[String] = (LowCardCatsMain ++ LowCardCatsAlt).distinct
@@ -55,11 +58,11 @@ object FeatureEngine {
   )
 
   val GlmCrossCats: Seq[String] = Seq(
-    "src_cq", "src_dq", "cq_dq", "src_reg", "src_ratioq", "src_cq_dq"
+    "src_cq", "src_dq", "src_dq5", "cq_dq", "cq_dq5", "src_reg", "src_ratioq", "src_cq_dq5"
   )
 
   val TeKeys: Seq[String] = Seq(
-    "src_cq_dq", "cq_dq", "src_cq", "src_dq", "reg_dq", "src_ratioq",
+    "src_cq_dq5", "src_cq_dq", "cq_dq5", "cq_dq", "src_cq", "src_dq5", "src_dq", "reg_dq", "src_ratioq",
     "src_rateq", "reg_age", "src_reg", "src_cq_age", "reg_cq_dq",
     "src_grades", "src_age", "src_reg_age"
   )
@@ -74,6 +77,7 @@ object FeatureEngine {
       srcMeanDays: Map[String, Double],
       srcStdDays: Map[String, Double],
       daysEdges: Array[Double],
+      daysEdges5: Array[Double],
       condEdges: Array[Double],
       ratioEdges: Array[Double],
       rateEdges: Array[Double],
@@ -116,7 +120,8 @@ object FeatureEngine {
       srcStdCond = srcStdCond,
       srcMeanDays = srcMeanDays,
       srcStdDays = srcStdDays,
-      daysEdges = quantileEdges(tmp5, "days"),
+      daysEdges = quantileEdges(tmp5, "days", 10),
+      daysEdges5 = quantileEdges(tmp5, "days", 5),
       condEdges = quantileEdges(tmp5, "condition_f"),
       ratioEdges = quantileEdges(tmp5, "ratio"),
       rateEdges = quantileEdges(tmp5, "rate"),
@@ -140,6 +145,7 @@ object FeatureEngine {
     val t5 = attachSourceZ(t4, stats.srcMeanCond, stats.srcStdCond, stats.srcMeanDays, stats.srcStdDays)
     val t6 = t5
       .withColumn("days_q", bucketize(col("days"), stats.daysEdges))
+      .withColumn("days_q5", bucketize(col("days"), stats.daysEdges5))
       .withColumn("cond_q", bucketize(col("condition_f"), stats.condEdges))
       .withColumn("ratio_q", bucketize(col("ratio"), stats.ratioEdges))
       .withColumn("rate_q", bucketize(col("rate"), stats.rateEdges))
@@ -281,10 +287,30 @@ object FeatureEngine {
       .withColumn("v_r", col("V") / crSafe)
       .withColumn("cc_r", col("cc") / crSafe)
       .withColumn("maxg_r", col("max_g") / crSafe)
+      .withColumn("x14_r", col("x14") / crSafe)
+      .withColumn("x17_r", col("x17") / crSafe)
       .withColumn("ushape_car10", col("u_shape") * (col("car") === lit("CAR_10")).cast(DoubleType))
       .withColumn("ushape_car0", col("u_shape") * (col("car") === lit("CAR_0")).cast(DoubleType))
       .withColumn("mono_car1", (lit(1.0) - col("cond_rk")) * (col("car") === lit("CAR_1")).cast(DoubleType))
       .withColumn("rev_car7", col("cond_rk") * (col("car") === lit("CAR_7")).cast(DoubleType))
+      .withColumn(
+        "pow_b",
+        when(col("car") === lit("CAR_1"), lit(1.5))
+          .when(col("car") === lit("CAR_10"), lit(1.2))
+          .when(col("car") === lit("CAR_0"), lit(0.3))
+          .when(col("car") === lit("CAR_2"), lit(0.4))
+          .when(col("car").isin("CAR_5", "CAR_7", "CAR_9"), lit(0.1))
+          .when(col("car").isin("CAR_4", "CAR_6"), lit(0.8))
+          .otherwise(lit(0.5))
+      )
+      .withColumn("pow_ratio_s", col("days") / pow(condSafe, col("pow_b")))
+      .drop("pow_b")
+      .withColumn(
+        "pow_rate15",
+        pow(greatest(col("days"), lit(1.0)), lit(1.5)) *
+          pow(greatest(lit(1.0) - col("cond_rk"), lit(1e-6)), lit(1.23))
+      )
+      .withColumn("w_hot9370", ((col("days") >= 9370.0 && col("days") < 9475.0).cast(DoubleType)))
   }
 
   def addCrosses(df: DataFrame): DataFrame = {
@@ -293,10 +319,13 @@ object FeatureEngine {
       .withColumn("reg_age", concat_ws("|", col("reg"), col("age")))
       .withColumn("src_cq", concat_ws("|", col("src"), col("cond_q")))
       .withColumn("src_dq", concat_ws("|", col("src"), col("days_q")))
+      .withColumn("src_dq5", concat_ws("|", col("src"), col("days_q5")))
       .withColumn("reg_cq", concat_ws("|", col("reg"), col("cond_q")))
       .withColumn("reg_dq", concat_ws("|", col("reg"), col("days_q")))
       .withColumn("src_cq_dq", concat_ws("|", col("src"), col("cond_q"), col("days_q")))
+      .withColumn("src_cq_dq5", concat_ws("|", col("src"), col("cond_q"), col("days_q5")))
       .withColumn("cq_dq", concat_ws("|", col("cond_q"), col("days_q")))
+      .withColumn("cq_dq5", concat_ws("|", col("cond_q"), col("days_q5")))
       .withColumn("src_ratioq", concat_ws("|", col("src"), col("ratio_q")))
       .withColumn("src_rateq", concat_ws("|", col("src"), col("rate_q")))
       .withColumn("src_cq_age", concat_ws("|", col("src"), col("cond_q"), col("age")))

@@ -1,0 +1,26 @@
+cb_oof_report
+backend=python_catboost_1.2.10_teacher
+n_folds=10
+n_bags=3
+iterations=800
+loss=RMSE
+arm1=Ordered,depth=5,l2=10,rsm=1.0
+arm2=Plain,depth=6,l2=6,rsm=0.3
+cats=medium_only_no_src_cq_dq
+auc_cb_main=0.689969
+auc_cb_alt=0.689097
+auc_cb_w62=0.691069
+auc_cb_max2=0.692074
+auc_te3=0.632137
+auc_cqdq=0.617840
+auc_src_ratioq=0.614202
+selected=max2
+auc_blend=0.692074
+note=honest 10fold x 3bag; no src_cq_dq as CatBoost cat; 3-way TE is rank-fusion only (mixing TE3 into CB ranks slightly hurts, so selected max2)
+criterion_single_arm_ge_0.68=PASS
+criterion_blend_ge_0.69=PASS
+scala_arm=CatBoostArm SparkML Estimator (spark JNI / python 1.2.10 / ordered-TE+GBT)
+teacher_oof=/workspace/submissions/cb_teacher_oof.parquet
+teacher_test=/workspace/submissions/cb_teacher_test.parquet
+scala_compile=success
+spark_local=SPARK_LOCAL_IP=127.0.0.1 local[4]

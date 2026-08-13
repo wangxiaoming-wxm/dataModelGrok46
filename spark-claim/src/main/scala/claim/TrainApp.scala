@@ -111,10 +111,13 @@ object TrainApp {
       reportBuf.append(s"pick_te_${k}_m=${best.toInt}\n")
     }
 
-    val te3 = TargetEncode.colName("src_cq_dq", bestM("src_cq_dq"))
-    val teCq = TargetEncode.colName("cq_dq", bestM("cq_dq"))
-    val teRq = TargetEncode.colName("src_ratioq", bestM("src_ratioq"))
-    val teSrcCq = TargetEncode.colName("src_cq", bestM("src_cq"))
+    def teCol(key: String): String =
+      TargetEncode.colName(key, bestM.getOrElse(key, 20.0))
+    val te3 = teCol("src_cq_dq")
+    val te35 = teCol("src_cq_dq5")
+    val teCq = teCol("cq_dq")
+    val teRq = teCol("src_ratioq")
+    val teSrcCq = teCol("src_cq")
 
     val recipes = Seq(
       "w62" -> Map("pred_main" -> 0.62, "pred_alt" -> 0.38),
@@ -147,7 +150,11 @@ object TrainApp {
         "pred_main" -> 0.30, "pred_alt" -> 0.18, "pred_lr" -> 0.10,
         teSrcCq -> 0.14, te3 -> 0.16, teCq -> 0.12
       ),
+      "hist2d5" -> Map(te35 -> 0.50, teCq -> 0.18, "pred_lr" -> 0.32),
       "cb_w62" -> Map("pred_cb_main" -> 0.62, "pred_cb_alt" -> 0.38),
+      "cb_lr_rf" -> Map(
+        "pred_cb_main" -> 0.42, "pred_cb_alt" -> 0.26, "pred_lr" -> 0.18, "pred_rf" -> 0.14
+      ),
       "cb_te" -> Map(
         "pred_cb_main" -> 0.40, "pred_cb_alt" -> 0.24, "pred_main" -> 0.08,
         te3 -> 0.14, teCq -> 0.08, teRq -> 0.06
@@ -180,8 +187,22 @@ object TrainApp {
         bestWeights = w
       }
     }
-    println(f"[OOF] selected $bestName=$bestBlend%.5f")
+    var bestOp = "sum"
+    if (ranked.columns.contains("r__pred_cb_main") && ranked.columns.contains("r__pred_cb_alt")) {
+      val max2 = ranked.withColumn("blend", greatest(col("r__pred_cb_main"), col("r__pred_cb_alt")))
+      val a = auc(max2, "label", "blend")
+      println(f"[OOF] blend cb_max2=$a%.5f")
+      reportBuf.append(f"blend_cb_max2=$a%.5f%n")
+      if (a > bestBlend) {
+        bestBlend = a
+        bestName = "cb_max2"
+        bestWeights = Map("pred_cb_main" -> 1.0, "pred_cb_alt" -> 1.0)
+        bestOp = "max2"
+      }
+    }
+    println(f"[OOF] selected $bestName=$bestBlend%.5f op=$bestOp")
     reportBuf.append(s"selected=$bestName\n")
+    reportBuf.append(s"blend_op=$bestOp\n")
     reportBuf.append(f"auc_blend=$bestBlend%.5f%n")
 
     val header =
@@ -217,7 +238,9 @@ object TrainApp {
     )
     val needRanks = bestWeights.keys.toSeq.filter(fullScored.columns.contains)
     val testRanked = addRanks(fullScored, needRanks)
-    val blendedTest = applyBlend(testRanked, bestWeights)
+    val blendedTest =
+      if (bestOp == "max2") applyMax2(testRanked, Seq("pred_cb_main", "pred_cb_alt"))
+      else applyBlend(testRanked, bestWeights)
     val predMap = blendedTest.select(col("id"), col("blend")).collect().map { r =>
       r.getString(0) -> (if (r.isNullAt(1) || r.getDouble(1).isNaN) 0.5 else r.getDouble(1))
     }.toMap
@@ -401,6 +424,12 @@ object TrainApp {
       i = j + 1
     }
     out
+  }
+
+  def applyMax2(df: DataFrame, srcs: Seq[String]): DataFrame = {
+    val cols = srcs.map(s => "r__" + s).filter(df.columns.contains).map(col)
+    val expr = if (cols.isEmpty) lit(0.5) else cols.reduce((a, b) => greatest(a, b))
+    df.withColumn("blend", expr)
   }
 
   def applyBlend(df: DataFrame, weights: Map[String, Double]): DataFrame = {

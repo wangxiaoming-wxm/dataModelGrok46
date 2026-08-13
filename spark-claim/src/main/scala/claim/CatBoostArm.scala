@@ -137,10 +137,10 @@ object CatBoostArm {
 
   def joinTeacher(apply: DataFrame): Option[DataFrame] = {
     val spark = apply.sparkSession
-    val oof = new File("/workspace/submissions/cb_teacher_oof.parquet")
-    val tes = new File("/workspace/submissions/cb_teacher_test.parquet")
-    val ready = new File("/workspace/submissions/cb_teacher_metrics.json")
-    if (!ready.isFile) return None
+    val packs = Seq(
+      ("/workspace/submissions/cb_w62_oof.parquet", "/workspace/submissions/cb_w62_test.parquet", "/workspace/submissions/cb_w62_metrics.json"),
+      ("/workspace/submissions/cb_teacher_oof.parquet", "/workspace/submissions/cb_teacher_test.parquet", "/workspace/submissions/cb_teacher_metrics.json")
+    )
     def cover(f: File): Option[DataFrame] = {
       if (!f.isFile) return None
       val t = spark.read.parquet(f.getAbsolutePath)
@@ -151,9 +151,16 @@ object CatBoostArm {
         Some(apply.select(col("id")).join(t, Seq("id"), "left"))
       else None
     }
-    val hit = cover(oof).orElse(cover(tes))
-    hit.foreach(_ => println("[cb] using teacher parquet for pred_cb_main/alt"))
-    hit
+    packs.foreach { case (oofP, tesP, readyP) =>
+      if (new File(readyP).isFile) {
+        val hit = cover(new File(oofP)).orElse(cover(new File(tesP)))
+        hit.foreach { _ =>
+          println(s"[cb] using teacher parquet $readyP for pred_cb_main/alt")
+          return hit
+        }
+      }
+    }
+    None
   }
 
   def sparkDual(train: DataFrame, apply: DataFrame): DataFrame = {
