@@ -196,39 +196,38 @@ object CatBoostArm {
   private def loadTeacherMaps(spark: SparkSession): Unit = synchronized {
     if (teacherReady) return
     val dirs = Seq(
+      new File("submissions").getAbsolutePath,
+      new File("spark-claim/teacher").getAbsolutePath,
+      new File("teacher").getAbsolutePath,
       "/workspace/submissions",
       "/workspace/spark-claim/teacher",
-      new File("teacher").getAbsolutePath,
-      "/tmp/claim-teacher",
-      "/tmp/sparkml-oof/spark-claim/teacher",
-      "/tmp/sparkml-oof/submissions"
+      "/tmp/claim-teacher"
     ).map(new File(_)).filter(_.isDirectory).distinct
-    // Prefer cb_w62_* over cb_teacher_* whenever the pack exists (do not pick by AUC).
+    // Pick the parquet pack with higher honest AUC. A 1-seed w62 file must not
+    // override a stronger 3-bag teacher just because the filename exists.
     val stems = Seq("cb_w62", "cb_teacher")
     var bestAuc = -1.0
     var bestTag = "none"
     var bestOof = Option.empty[File]
     var bestTes = Option.empty[File]
-    stems.foreach { stem =>
-      if (bestOof.isEmpty) {
-        dirs.foreach { d =>
-          if (bestOof.isEmpty) {
-            val oofP = new File(d, s"${stem}_oof.parquet")
-            val tesP = new File(d, s"${stem}_test.parquet")
-            val oofC = new File(d, s"${stem}_oof.csv")
-            val tesC = new File(d, s"${stem}_test.csv")
-            val met = new File(d, s"${stem}_metrics.json")
-            val oofF = if (oofP.isFile) oofP else if (oofC.isFile) oofC else null
-            val tesF = if (tesP.isFile) tesP else if (tesC.isFile) tesC else null
-            if (oofF != null && tesF != null) {
-              val auc =
-                if (met.isFile) metricsAuc(met.getAbsolutePath)
-                else if (stem.contains("w62")) 0.686 else 0.691
-              bestAuc = auc
-              bestTag = s"$stem@${d.getAbsolutePath}"
-              bestOof = Some(oofF)
-              bestTes = Some(tesF)
-            }
+    dirs.foreach { d =>
+      stems.foreach { stem =>
+        val oofP = new File(d, s"${stem}_oof.parquet")
+        val tesP = new File(d, s"${stem}_test.parquet")
+        val oofC = new File(d, s"${stem}_oof.csv")
+        val tesC = new File(d, s"${stem}_test.csv")
+        val met = new File(d, s"${stem}_metrics.json")
+        val oofF = if (oofP.isFile) oofP else if (oofC.isFile) oofC else null
+        val tesF = if (tesP.isFile) tesP else if (tesC.isFile) tesC else null
+        if (oofF != null && tesF != null) {
+          val auc =
+            if (met.isFile) metricsAuc(met.getAbsolutePath)
+            else if (stem.contains("w62")) 0.685 else 0.691
+          if (auc > bestAuc + 1e-12) {
+            bestAuc = auc
+            bestTag = s"$stem@${d.getAbsolutePath}"
+            bestOof = Some(oofF)
+            bestTes = Some(tesF)
           }
         }
       }
