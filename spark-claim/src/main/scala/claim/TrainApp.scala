@@ -296,7 +296,7 @@ object TrainApp {
           .withColumn("pred_cb_alt", lit(0.1))
       } else {
         try {
-          CatBoostArm.joinTeacher(vaF).getOrElse(OrderedArm.score(trF, vaF, gbtIter))
+          CatBoostArm.score(trF, vaTe)
         } catch {
           case e: OutOfMemoryError => throw e
           case e: Throwable =>

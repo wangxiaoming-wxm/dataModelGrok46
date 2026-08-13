@@ -163,7 +163,9 @@ def main() -> None:
     r_main, r_alt = rank(oof_main), rank(oof_alt)
     w62 = 0.62 * r_main + 0.38 * r_alt
     r_te3, r_cq, r_srq = rank(oof_te3), rank(oof_cqdq), rank(oof_srq)
-    blend = 0.82 * w62 + 0.10 * r_te3 + 0.04 * r_cq + 0.04 * r_srq
+    max2 = np.maximum(r_main, r_alt)
+    # TE3 is an independent score; a large mix into CB ranks slightly hurts this run.
+    blend = max2
 
     auc_main = float(roc_auc_score(y, oof_main))
     auc_alt = float(roc_auc_score(y, oof_alt))
@@ -192,6 +194,7 @@ def main() -> None:
         f"auc_cqdq={auc_cq:.6f}\n"
         f"auc_src_ratioq={auc_srq:.6f}\n"
         f"auc_blend={auc_blend:.6f}\n"
+        "selected=max2\n"
         f"elapsed_sec={time.time()-t0:.1f}\n"
         "note=3-way TE is rank-fusion only; never a CatBoost cat column\n"
     )
