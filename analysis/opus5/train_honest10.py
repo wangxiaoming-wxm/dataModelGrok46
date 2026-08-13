@@ -53,6 +53,15 @@ ITERS = 800
 W62_OOF = 0.70159
 THREADS = int(os.environ.get("CB_THREADS", "4"))
 TARGET_FULL = 0.70023  # opus5 5-fold 8-seed max2
+# opus5 5-fold per-seed AUCs (merger_ord8 / v2_cat_alt8 artifacts)
+FIVE_FOLD_MAIN = {
+    2026: 0.690039, 2027: 0.687846, 2028: 0.689450, 2029: 0.686596,
+    2030: 0.690014, 2031: 0.687627, 2032: 0.688861, 2033: 0.691640,
+}
+FIVE_FOLD_ALT = {
+    2026: 0.688584, 2027: 0.687396, 2028: 0.688310, 2029: 0.685804,
+    2030: 0.689157, 2031: 0.689947, 2032: 0.688518, 2033: 0.691585,
+}
 
 
 def rank01(a: np.ndarray) -> np.ndarray:
@@ -191,20 +200,30 @@ def write_report(y: np.ndarray) -> dict:
         "threads": THREADS,
     }
     if main:
+        dlt = []
+        for s, a in zip(main["seeds"], main["per_seed"]):
+            base = FIVE_FOLD_MAIN.get(int(s))
+            dlt.append(None if base is None else round(a - base, 6))
         report["main"] = {
             "n_seed": main["n_seed"],
             "seeds": main["seeds"],
             "per_seed": [round(a, 6) for a in main["per_seed"]],
+            "delta_vs_5fold_same_seed": dlt,
             "pool_auc": main["pool_auc"],
             "per_seed_mean": main["per_seed_mean"],
         }
         np.savez(ART / "honest10_main.npz", oof=main["oof"], test_pred=main["test"], y=y,
                  seeds=np.array(main["seeds"]), per_seed=np.array(main["per_seed"]))
     if alt:
+        dlt = []
+        for s, a in zip(alt["seeds"], alt["per_seed"]):
+            base = FIVE_FOLD_ALT.get(int(s))
+            dlt.append(None if base is None else round(a - base, 6))
         report["alt"] = {
             "n_seed": alt["n_seed"],
             "seeds": alt["seeds"],
             "per_seed": [round(a, 6) for a in alt["per_seed"]],
+            "delta_vs_5fold_same_seed": dlt,
             "pool_auc": alt["pool_auc"],
             "per_seed_mean": alt["per_seed_mean"],
         }
@@ -217,9 +236,12 @@ def write_report(y: np.ndarray) -> dict:
         nest = nested_auc(mx, y)
         report["max2_full"] = full
         report["max2_nested"] = nest
-        report["beats_w62"] = bool(full >= W62_OOF)
-        report["delta_vs_w62"] = full - W62_OOF
-        report["delta_vs_opus5_5fold"] = full - TARGET_FULL
+        n_both = len(set(main["seeds"]) & set(alt["seeds"]))
+        report["n_seed_both"] = n_both
+        report["comparable_to_opus5_8seed"] = n_both >= 8
+        report["beats_w62"] = bool(n_both >= 8 and full >= W62_OOF)
+        report["delta_vs_w62"] = full - W62_OOF if n_both >= 8 else None
+        report["delta_vs_opus5_5fold"] = full - TARGET_FULL if n_both >= 8 else None
         np.savez(ART / "honest10_max2.npz", oof=mx, test_pred=te, y=y)
         print(
             f"\n[honest10] seeds={sorted(set(main['seeds']) & set(alt['seeds']))} "
