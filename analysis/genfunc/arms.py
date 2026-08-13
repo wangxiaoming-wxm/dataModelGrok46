@@ -7,6 +7,7 @@ from sklearn.linear_model import Ridge
 
 from common import (
     apply_bins,
+    cond_r_of,
     fill_condition,
     ohe_levels_apply,
     per_source_rank,
@@ -62,8 +63,8 @@ def make_keys(trn, val, cond_tr, cond_va, rk_tr, rk_va):
     cr_va = cond_va / pd.Series(src_va).map(med).fillna(float(np.nanmedian(med))).astype(float).to_numpy()
     rate_tr = trn["days"].to_numpy(float) * (1.0 - rk_tr)
     rate_va = val["days"].to_numpy(float) * (1.0 - rk_va)
-    rq_tr, rq_va, _ = qcut_apply(trn["days"].to_numpy(float) / np.clip(cr_tr, 1e-6, None), val["days"].to_numpy(float) / np.clip(cr_va, 1e-6, None), 10)
-    tq_tr, tq_va, _ = qcut_apply(rate_tr, rate_va, 10)
+    rq_tr, rq_va, rbins = qcut_apply(trn["days"].to_numpy(float) / np.clip(cr_tr, 1e-6, None), val["days"].to_numpy(float) / np.clip(cr_va, 1e-6, None), 10)
+    tq_tr, tq_va, tbins = qcut_apply(rate_tr, rate_va, 10)
 
     def S(a):
         return np.asarray(a).astype(str)
@@ -99,7 +100,47 @@ def make_keys(trn, val, cond_tr, cond_va, rk_tr, rk_va):
         d["reg_dq"] = d["reg"] + "|" + d["dq"]
         d["reg_cq_dq"] = d["reg"] + "|" + d["cq"] + "|" + d["dq"]
         d["src_cq_age"] = d["src"] + "|" + d["cq"] + "|" + d["age"]
-    return tr, va, dtr, dva, ctr, cva, dbins, cbins
+    edges = {"days": dbins.tolist(), "cond": cbins.tolist(), "ratio": rbins.tolist(), "rate": tbins.tolist()}
+    return tr, va, dtr, dva, ctr, cva, dbins, cbins, edges
+
+
+def compose_keys(src, region, age, dbin, cbin, rbin, tbin):
+    def S(a):
+        return np.asarray(a).astype(str)
+
+    d = {
+        "src": S(src),
+        "reg": S(region),
+        "age": S(np.asarray(age).astype(int)),
+        "cq": S(cbin),
+        "dq": S(dbin),
+        "rq": S(rbin),
+        "tq": S(tbin),
+    }
+    d["src_reg"] = d["src"] + "|" + d["reg"]
+    d["src_age"] = d["src"] + "|" + d["age"]
+    d["reg_age"] = d["reg"] + "|" + d["age"]
+    d["src_cq"] = d["src"] + "|" + d["cq"]
+    d["src_dq"] = d["src"] + "|" + d["dq"]
+    d["cq_dq"] = d["cq"] + "|" + d["dq"]
+    d["src_cq_dq"] = d["src"] + "|" + d["cq"] + "|" + d["dq"]
+    d["src_rq"] = d["src"] + "|" + d["rq"]
+    d["src_tq"] = d["src"] + "|" + d["tq"]
+    d["reg_dq"] = d["reg"] + "|" + d["dq"]
+    d["reg_cq_dq"] = d["reg"] + "|" + d["cq"] + "|" + d["dq"]
+    d["src_cq_age"] = d["src"] + "|" + d["cq"] + "|" + d["age"]
+    return d
+
+
+def keys_from_edges(df, cond, rk, edges, med_map):
+    days = df["days"].to_numpy(float)
+    src = df["source"].astype(str).to_numpy()
+    cr = cond_r_of(src, cond, med_map)
+    dbin = apply_bins(days, edges["days"])
+    cbin = apply_bins(cond, edges["cond"])
+    rbin = apply_bins(days / np.clip(cr, 1e-6, None), edges["ratio"])
+    tbin = apply_bins(days * (1.0 - rk), edges["rate"])
+    return compose_keys(src, df["region"], df["age_range"], dbin, cbin, rbin, tbin), dbin, cbin
 
 
 def ordered_te(keys, y, n_perm=4, m=20.0, seed=0):
@@ -240,7 +281,18 @@ def fit_power_ridge(trn, val, ytr, cond_tr, cond_va, rk_tr, rk_va, src_levels, r
     Xs, mu, sd = standardize_fit(Xtr)
     m = Ridge(alpha=alpha)
     m.fit(Xs, ytr)
-    pack = {"kind": "power", "a": a, "c": c, "bmap": bmap, "mu": mu.tolist(), "sd": sd.tolist(), "coef": m.coef_.tolist(), "intercept": float(m.intercept_)}
+    pack = {
+        "kind": "power",
+        "a": a,
+        "c": c,
+        "bmap": bmap,
+        "mu": mu.tolist(),
+        "sd": sd.tolist(),
+        "coef": m.coef_.tolist(),
+        "intercept": float(m.intercept_),
+        "src_levels": src_levels,
+        "reg_levels": reg_levels,
+    }
     return m.predict(Xs), m.predict(standardize_apply(Xva, mu, sd)), pack
 
 
@@ -366,3 +418,83 @@ def fuse_linear(parts: dict, weights: dict) -> np.ndarray:
         s = s + float(w) * np.asarray(parts[k], dtype=float)
         wsum += float(w)
     return s / wsum if wsum else s
+
+
+def fill_from_stats(df, stats):
+    med_map = stats["med_map"]
+    glob = float(stats["glob_cond"])
+    cond = df["condition"].fillna(df["source"].map(med_map)).fillna(glob).to_numpy(dtype=float)
+    src = df["source"].astype(str).to_numpy()
+    rk = per_source_rank(src, cond, np.asarray(stats["cond_ref_src"]), np.asarray(stats["cond_ref_val"], dtype=float))
+    return cond, rk, src
+
+
+def predict_spline(df, cond, rk, pack):
+    extra, _ = car_terms(df["source"].astype(str), rk)
+    X = spline_design(
+        df["days"].to_numpy(float),
+        rk,
+        df["source"].astype(str),
+        df["region"].astype(str),
+        df["age_range"],
+        pack["days_knots"],
+        pack["rk_knots"],
+        pack["src_levels"],
+        pack["reg_levels"],
+        pack["large"],
+        extra,
+    )
+    Xs = standardize_apply(X, np.asarray(pack["mu"]), np.asarray(pack["sd"]))
+    return Xs @ np.asarray(pack["coef"]) + float(pack["intercept"])
+
+
+def predict_table_pack(src, dbin, cbin, pack):
+    sm = np.asarray(pack["sm"], dtype=float)
+    ct = np.asarray(pack["ct"], dtype=float)
+    neigh = pack["neigh"]
+    glob = make_global(sm, ct, pack["prior"], pack["m"], neigh)
+    return predict_table(src, dbin, cbin, pack["src_levels_tab"], sm, ct, pack["prior"], pack["m"], neigh, pack["alpha_glob"], glob)
+
+
+def _te_from_map(keys, rec, prior, m):
+    out = np.empty(len(keys), dtype=float)
+    stats = rec["stats"]
+    for i, k in enumerate(keys):
+        row = stats.get(str(k))
+        if row is None:
+            out[i] = prior
+        else:
+            out[i] = (row["sum"] + prior * m) / (row["count"] + m)
+    return out
+
+
+def predict_te(km, pack, table=None):
+    cols = []
+    for name in pack["key_order"]:
+        if name == "table8":
+            cols.append(np.asarray(table, dtype=float))
+            continue
+        rec = pack["maps"][name]
+        cols.append(_te_from_map(km[name], rec, rec["prior"], rec["m"]))
+    X = np.column_stack(cols)
+    return X @ np.asarray(pack["coef"]) + float(pack["intercept"])
+
+
+def predict_power(df, cond, rk, pack):
+    src = df["source"].astype(str).to_numpy()
+    days = df["days"].to_numpy(float)
+    sc = power_score(days, cond, rk, src, pack["a"], pack["c"], pack["bmap"]) / 1e5
+    W, _ = window_matrix(days)
+    age8 = (df["age_range"].to_numpy(float) >= 8).astype(float)[:, None]
+    X = np.hstack(
+        [
+            sc[:, None],
+            np.log1p(np.clip(sc, 0, None))[:, None],
+            ohe_levels_apply(src, pack["src_levels"]),
+            ohe_levels_apply(df["region"].astype(str), pack["reg_levels"]),
+            age8,
+            W,
+        ]
+    )
+    Xs = standardize_apply(X, np.asarray(pack["mu"]), np.asarray(pack["sd"]))
+    return Xs @ np.asarray(pack["coef"]) + float(pack["intercept"])

@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""Portable identity-link claim scorer (numpy / pandas only).
+"""Portable claim scorer: numpy / pandas only.
 
-Given statistics fit on a training fold, score any dataframe.
-Spark port: every operation is median/quantile, searchsorted rank,
-piecewise-linear truncated basis, map-join 2D table, and a dot product.
+fit_fold_stats(train_df) -> stats
+score(df, stats) -> p in [0, 1]   (closed identity-link arms + rank fuse)
 
-Do not pass test labels or id. Stats must be fit on the train fold only.
+Spark port (see FORMULA.md):
+  medians, qcut edges, searchsorted rank, piecewise-linear greatest(x-k,0),
+  map-join 2D table with 8-neighbour smoothing, TE maps, Ridge dot product,
+  percent_rank fusion.
+
+The ≥0.68 stack adds Spark GBTRegressor (RMSE, fixed 400 trees, no ES)
+and is documented in FORMULA.md; this file stays tree-free so it can be
+translated line-for-line.
 """
 from __future__ import annotations
 
@@ -15,298 +21,169 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import Ridge
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from arms import (
+    fill_from_stats,
+    fit_power_ridge,
+    fit_spline_car,
+    fit_table8,
+    fit_te_ridge,
+    fuse_rank,
+    keys_from_edges,
+    make_keys,
+    predict_power,
+    predict_spline,
+    predict_table_pack,
+    predict_te,
+)
 from common import (
     OUT,
     auc,
-    apply_bins,
-    cond_r_of,
     dump_json,
+    fill_condition,
     load_train,
     per_source_rank,
-    power_score,
-    qcut_apply,
-    quantile_knots,
     save_oof,
     skf_splits,
-    source_b_map,
     source_median_map,
-    standardize_apply,
-    standardize_fit,
-    te_group,
-    te_pair,
 )
-from exp1_spline import LARGE_N, spline_design
-from exp2_car_shapes import car_terms
-from exp3_2d_smooth import NEIGH, fill_grid, lookup, make_global, predict_table, smooth_grid, src_index
+
+# Frozen from 5-fold screen (exp6). Closed family, no trees.
+CLOSED_WEIGHTS = {"te_ord": 0.45, "table8": 0.25, "spline": 0.20, "power": 0.10}
+# A priori portable GBT stack (not used inside score(); Spark recipe).
+GBT_WEIGHTS = {"lgb1": 0.40, "te_ord": 0.30, "table8": 0.15, "spline": 0.15}
 
 
-def _fill_with_medmap(df, med_map: dict, glob: float) -> np.ndarray:
-    med = df["source"].map(med_map)
-    return df["condition"].fillna(med).fillna(glob).to_numpy(dtype=float)
-
-
-def windows_from_spec(days: np.ndarray) -> np.ndarray:
-    d = np.asarray(days, dtype=float)
-    cols = [((d >= lo) & (d < hi)).astype(float) for _, lo, hi in WINDOW_SPEC]
-    cols.append((d >= 10000.0).astype(float))
-    return np.column_stack(cols)
-
-
-def fit_fold_stats(train_df: pd.DataFrame, y=None, alpha: float = 25.0) -> dict:
-    """Fit generating-process statistics + identity Ridge on one train fold."""
+def fit_fold_stats(train_df: pd.DataFrame, y=None) -> dict:
+    """Fit closed-form arms on one train fold. No test labels, no id."""
     trn = train_df.reset_index(drop=True)
     if y is None:
         y = trn["label"].to_numpy(dtype=float)
     else:
         y = np.asarray(y, dtype=float)
-    cond = trn["condition"].to_numpy(dtype=float)
-    src = trn["source"].astype(str).to_numpy()
-    med_map = source_median_map(src, np.where(np.isnan(cond), np.nan, cond))
-    # source_median_map uses the provided cond including NaN — recompute properly
-    cond_f = trn["condition"].fillna(trn.groupby("source")["condition"].transform("median"))
-    glob = float(trn["condition"].median())
-    cond_f = cond_f.fillna(glob).to_numpy(dtype=float)
-    med_map = source_median_map(src, cond_f)
-    days = trn["days"].to_numpy(dtype=float)
-    rk = per_source_rank(src, cond_f, src, cond_f)
-    src_levels = sorted(pd.unique(src))
+    # dummy val = train, we only keep packs
+    val = trn
+    src_levels = sorted(trn["source"].astype(str).unique())
     reg_levels = sorted(trn["region"].astype(str).unique())
-    large = [s for s in src_levels if int((src == s).sum()) >= LARGE_N]
-    days_knots = quantile_knots(days, 8).tolist()
-    rk_knots = quantile_knots(rk, 6).tolist()
-    extra, car_names = car_terms(src, rk)
-    X = spline_design(
-        days, rk, src, trn["region"].astype(str), trn["age_range"], days_knots, rk_knots, src_levels, reg_levels, large, extra
-    )
-    bmap = source_b_map(src, days, cond_f, y)
-    sc = power_score(days, cond_f, rk, src, 1.5, 1.227, bmap) / 1e5
-    # 2D table days_q5 × cond_q10
-    dbin, _, days_bins = qcut_apply(days, days, 5)
-    cbin, _, cond_bins = qcut_apply(cond_f, cond_f, 10)
     src_levels_tab = src_levels + ["__UNK__"]
-    idx = src_index(src, src_levels_tab)
-    sm, ct = fill_grid(idx, dbin, cbin, y, len(src_levels_tab), 5, 10)
-    prior = float(y.mean())
-    neigh = NEIGH[2]
-    grid = smooth_grid(sm, ct, prior, 10.0, neigh["w0"], neigh["ws"], neigh["wd"])
-    glob_grid = make_global(sm, ct, prior, 10.0, neigh)
-    t = predict_table(src, dbin, cbin, src_levels_tab, sm, ct, prior, 10.0, neigh, 0.25, glob_grid)
-    # a few TE keys
-    cq = dbin  # placeholder unused
-    te_src = te_group(src, y)
-    te_reg = te_group(trn["region"].astype(str), y)
-    key_cqdq = np.asarray(dbin).astype(str) + "|" + np.asarray(cbin).astype(str)
-    key_src_cqdq = src.astype(str) + "|" + key_cqdq
-    te_cqdq = te_group(key_cqdq, y)
-    te_src_cqdq = te_group(key_src_cqdq, y)
-
-    te_src_v, _, _, _ = te_pair(src, src, y, m=10)
-    te_reg_v, _, _, _ = te_pair(trn["region"].astype(str), trn["region"].astype(str), y, m=10)
-    te_cqdq_v, _, _, _ = te_pair(key_cqdq, key_cqdq, y, m=12)
-    te_src_cqdq_v, _, _, _ = te_pair(key_src_cqdq, key_src_cqdq, y, m=10)
-
-    J = np.hstack(
-        [
-            X,
-            t[:, None],
-            sc[:, None],
-            te_src_cqdq_v[:, None],
-            te_cqdq_v[:, None],
-            te_src_v[:, None],
-            te_reg_v[:, None],
-            trn["x20"].to_numpy(float)[:, None],
-            trn["V"].to_numpy(float)[:, None],
-        ]
-    )
-    Xs, mu, sd = standardize_fit(J)
-    model = Ridge(alpha=alpha, fit_intercept=True)
-    model.fit(Xs, y)
-
-    # serialize 2D sums/counts for Spark
-    sm_list = sm.tolist()
-    ct_list = ct.tolist()
+    cond_tr, cond_va = fill_condition(trn, val)
+    src_tr = trn["source"].astype(str).to_numpy()
+    rk_tr = per_source_rank(src_tr, cond_tr, src_tr, cond_tr)
+    rk_va = rk_tr
+    km_tr, km_va, dtr, dva, ctr, cva, dbins, cbins, edges = make_keys(trn, val, cond_tr, cond_va, rk_tr, rk_va)
+    _, _, pack_sp, _ = fit_spline_car(trn, val, y, src_levels, reg_levels, alpha=20.0)
+    t_tr, t_va, pack_tab = fit_table8(trn, val, y, cond_tr, cond_va, dtr, dva, ctr, cva, src_levels_tab, alpha_glob=0.4)
+    pack_tab["days_bins"] = dbins.tolist()
+    pack_tab["cond_bins"] = cbins.tolist()
+    _, _, pack_te = fit_te_ridge(km_tr, km_va, y, use_ordered=True, alpha=18.0, seed=7)
+    _, _, pack_pw = fit_power_ridge(trn, val, y, cond_tr, cond_va, rk_tr, rk_va, src_levels, reg_levels, a=1.5, c=0.5, alpha=4.0)
     stats = {
-        "med_map": {str(k): float(v) for k, v in med_map.items()},
-        "glob_cond": glob,
-        "src_levels": src_levels,
-        "reg_levels": reg_levels,
-        "large_src": large,
-        "days_knots": days_knots,
-        "rk_knots": rk_knots,
-        "bmap": {str(k): float(v) for k, v in bmap.items()},
-        "power_a": 1.5,
-        "power_c": 1.227,
-        "days_bins": days_bins.tolist(),
-        "cond_bins": cond_bins.tolist(),
-        "src_levels_tab": src_levels_tab,
-        "table_sm": sm_list,
-        "table_ct": ct_list,
-        "table_prior": prior,
-        "table_m": 10.0,
-        "neigh": {"w0": neigh["w0"], "ws": neigh["ws"], "wd": neigh["wd"]},
-        "alpha_glob": 0.25,
-        "te_src": {str(k): {"sum": float(r["sum"]), "count": int(r["count"])} for k, r in te_src.iterrows()},
-        "te_reg": {str(k): {"sum": float(r["sum"]), "count": int(r["count"])} for k, r in te_reg.iterrows()},
-        "te_cqdq": {str(k): {"sum": float(r["sum"]), "count": int(r["count"])} for k, r in te_cqdq.iterrows()},
-        "te_src_cqdq": {str(k): {"sum": float(r["sum"]), "count": int(r["count"])} for k, r in te_src_cqdq.iterrows()},
-        "ridge_coef": model.coef_.tolist(),
-        "ridge_intercept": float(model.intercept_),
-        "ridge_mu": mu.tolist(),
-        "ridge_sd": sd.tolist(),
-        "ridge_alpha": alpha,
-        "car_names": car_names,
+        "med_map": {str(k): float(v) for k, v in source_median_map(src_tr, cond_tr).items()},
+        "glob_cond": float(np.median(cond_tr)),
+        "cond_ref_src": src_tr.tolist(),
+        "cond_ref_val": cond_tr.tolist(),
+        "edges": edges,
+        "spline": pack_sp,
+        "table8": pack_tab,
+        "te_ord": pack_te,
+        "power": pack_pw,
+        "weights": CLOSED_WEIGHTS,
         "n_train": int(len(trn)),
-        "prior": prior,
+        "prior": float(y.mean()),
     }
     return stats
 
 
-def _te_from_dict(keys, d: dict, prior: float, m: float) -> np.ndarray:
-    out = np.empty(len(keys), dtype=float)
-    for i, k in enumerate(keys):
-        rec = d.get(str(k))
-        if rec is None:
-            out[i] = prior
-        else:
-            out[i] = (rec["sum"] + prior * m) / (rec["count"] + m)
-    return out
+def score_arms(df: pd.DataFrame, stats: dict) -> dict:
+    """Return each closed arm on df. Pure numpy/pandas."""
+    df = df.reset_index(drop=True)
+    cond, rk, src = fill_from_stats(df, stats)
+    km, dbin, cbin = keys_from_edges(df, cond, rk, stats["edges"], stats["med_map"])
+    p_sp = predict_spline(df, cond, rk, stats["spline"])
+    p_tab = predict_table_pack(src, dbin, cbin, stats["table8"])
+    p_te = predict_te(km, stats["te_ord"])
+    p_pw = predict_power(df, cond, rk, stats["power"])
+    return {"spline": p_sp, "table8": p_tab, "te_ord": p_te, "power": p_pw}
 
 
 def score(df: pd.DataFrame, stats: dict) -> np.ndarray:
-    """Score any dataframe with frozen fold statistics. Pure numpy/pandas."""
-    src = df["source"].astype(str).to_numpy()
-    cond_f = _fill_with_medmap(df, stats["med_map"], stats["glob_cond"])
-    days = df["days"].to_numpy(dtype=float)
-    # rank vs the training-fold condition lists are not stored raw; use
-    # searchsorted against per-source empirical CDF encoded by... we need ref.
-    # Reconstruct rank from med_map only is wrong. Store cond refs in stats.
-    # Fallback: if cond_ref present use it; else percentile vs knots is wrong.
-    # We store cond_ref in stats when available.
-    if "cond_ref" in stats:
-        rk = per_source_rank(src, cond_f, np.array(stats["cond_ref_src"]), np.array(stats["cond_ref_val"]))
-    else:
-        # approximate: rank against a uniform grid is bad; use cond vs source median as proxy
-        # Better: use stored rk_knots only as g-variable on min-max scaled cond_r
-        cr = cond_r_of(src, cond_f, stats["med_map"])
-        # map cond_r through a logistic-ish rank proxy in [0,1]
-        rk = 1.0 / (1.0 + np.exp(-2.0 * (np.log(np.clip(cr, 1e-6, None)))))
-        rk = np.clip(rk, 0.0, 1.0)
-    extra, _ = car_terms(src, rk)
-    X = spline_design(
-        days,
-        rk,
-        src,
-        df["region"].astype(str),
-        df["age_range"],
-        stats["days_knots"],
-        stats["rk_knots"],
-        stats["src_levels"],
-        stats["reg_levels"],
-        stats["large_src"],
-        extra,
-    )
-    sc = power_score(days, cond_f, rk, src, stats["power_a"], stats["power_c"], stats["bmap"]) / 1e5
-    dbin = apply_bins(days, stats["days_bins"])
-    cbin = apply_bins(cond_f, stats["cond_bins"])
-    sm = np.asarray(stats["table_sm"], dtype=float)
-    ct = np.asarray(stats["table_ct"], dtype=float)
-    neigh = stats["neigh"]
-    grid = smooth_grid(sm, ct, stats["table_prior"], stats["table_m"], neigh["w0"], neigh["ws"], neigh["wd"])
-    glob = make_global(sm, ct, stats["table_prior"], stats["table_m"], neigh)
-    t = predict_table(
-        src, dbin, cbin, stats["src_levels_tab"], sm, ct, stats["table_prior"], stats["table_m"], neigh, stats["alpha_glob"], glob
-    )
-    key_cqdq = np.asarray(dbin).astype(str) + "|" + np.asarray(cbin).astype(str)
-    key_src_cqdq = src.astype(str) + "|" + key_cqdq
-    te_src_cqdq_v = _te_from_dict(key_src_cqdq, stats["te_src_cqdq"], stats["prior"], 10.0)
-    te_cqdq_v = _te_from_dict(key_cqdq, stats["te_cqdq"], stats["prior"], 12.0)
-    te_src_v = _te_from_dict(src, stats["te_src"], stats["prior"], 10.0)
-    te_reg_v = _te_from_dict(df["region"].astype(str), stats["te_reg"], stats["prior"], 10.0)
-    J = np.hstack(
-        [
-            X,
-            t[:, None],
-            sc[:, None],
-            te_src_cqdq_v[:, None],
-            te_cqdq_v[:, None],
-            te_src_v[:, None],
-            te_reg_v[:, None],
-            df["x20"].to_numpy(float)[:, None],
-            df["V"].to_numpy(float)[:, None],
-        ]
-    )
-    Xs = standardize_apply(J, np.asarray(stats["ridge_mu"]), np.asarray(stats["ridge_sd"]))
-    pred = Xs @ np.asarray(stats["ridge_coef"]) + float(stats["ridge_intercept"])
-    return np.clip(pred, 0.0, 1.0)
+    """Rank-fuse closed arms. Ranking is within the scored batch (Spark percent_rank)."""
+    parts = score_arms(df, stats)
+    fused = fuse_rank(parts, stats.get("weights", CLOSED_WEIGHTS))
+    return np.clip(fused, 0.0, 1.0)
 
 
-def fit_fold_stats_with_ref(train_df: pd.DataFrame, y=None, alpha: float = 25.0) -> dict:
-    stats = fit_fold_stats(train_df, y=y, alpha=alpha)
-    trn = train_df.reset_index(drop=True)
-    src = trn["source"].astype(str).to_numpy()
-    cond_f = _fill_with_medmap(trn, stats["med_map"], stats["glob_cond"])
-    stats["cond_ref_src"] = src.tolist()
-    stats["cond_ref_val"] = cond_f.tolist()
-    return stats
-
-
-def cv_oof(train_df: pd.DataFrame, n_splits: int = 10, alpha: float = 25.0):
+def cv_oof(train_df: pd.DataFrame, n_splits: int = 10):
     y = train_df["label"].to_numpy(dtype=float)
     oof = np.zeros(len(y))
+    oof_te = np.zeros(len(y))
+    oof_tab = np.zeros(len(y))
     splits = skf_splits(y.astype(int), n_splits)
     per_fold = []
-    last_stats = None
+    last = None
     for fold, (tr_i, va_i) in enumerate(splits):
-        stats = fit_fold_stats_with_ref(train_df.iloc[tr_i], y=y[tr_i], alpha=alpha)
-        pred = score(train_df.iloc[va_i], stats)
+        stats = fit_fold_stats(train_df.iloc[tr_i], y=y[tr_i])
+        parts = score_arms(train_df.iloc[va_i], stats)
+        pred = fuse_rank(parts, CLOSED_WEIGHTS)
         oof[va_i] = pred
-        per_fold.append({"fold": fold, "auc": auc(y[va_i], pred)})
-        last_stats = stats
-        print(f"portable fold {fold} auc={per_fold[-1]['auc']:.5f}", flush=True)
-    return oof, float(auc(y, oof)), per_fold, last_stats
+        oof_te[va_i] = parts["te_ord"]
+        oof_tab[va_i] = parts["table8"]
+        last = stats
+        rec = {"fold": fold, "auc": auc(y[va_i], pred), "te": auc(y[va_i], parts["te_ord"]), "table": auc(y[va_i], parts["table8"])}
+        per_fold.append(rec)
+        print(f"portable fold {fold} fuse={rec['auc']:.5f} te={rec['te']:.5f} tab={rec['table']:.5f}", flush=True)
+    return oof, float(auc(y, oof)), per_fold, last, oof_te, oof_tab
 
 
 def main():
     df, y = load_train()
-    print("=== portable_score 5-fold screen alpha ===", flush=True)
-    splits5 = skf_splits(y, 5)
-    screen = []
-    best = {"auc": -1.0, "alpha": 25.0}
-    for alpha in (12.0, 25.0, 40.0):
-        oof = np.zeros(len(y))
-        for tr_i, va_i in splits5:
-            stats = fit_fold_stats_with_ref(df.iloc[tr_i], y=y[tr_i], alpha=alpha)
-            oof[va_i] = score(df.iloc[va_i], stats)
-        a = auc(y, oof)
-        screen.append({"alpha": alpha, "auc5": a})
-        print(f"screen alpha={alpha} auc5={a:.5f}", flush=True)
-        if a > best["auc"]:
-            best = {"auc": a, "alpha": alpha}
+    print("=== portable closed 5-fold ===", flush=True)
+    oof5 = np.zeros(len(y))
+    for tr_i, va_i in skf_splits(y, 5):
+        stats = fit_fold_stats(df.iloc[tr_i], y=y[tr_i])
+        oof5[va_i] = score(df.iloc[va_i], stats)
+    print(f"closed 5fold {auc(y, oof5):.5f}", flush=True)
 
-    print("=== portable_score 10-fold report ===", flush=True)
-    oof, a10, pf, stats = cv_oof(df, n_splits=10, alpha=best["alpha"])
+    print("=== portable closed 10-fold ===", flush=True)
+    oof, a10, pf, stats, oof_te, oof_tab = cv_oof(df, n_splits=10)
     save_oof("portable_oof.npy", oof)
-    # drop bulky cond_ref from the published stats dump? keep it — Spark needs it for rank.
-    # Write a compact params file without cond_ref for the formula doc, plus full json.
-    compact = {k: v for k, v in stats.items() if k not in ("cond_ref_src", "cond_ref_val", "table_sm", "table_ct")}
-    compact["n_table_src"] = len(stats["src_levels_tab"])
+    save_oof("portable_te_oof.npy", oof_te)
+    compact = {
+        "weights": CLOSED_WEIGHTS,
+        "gbt_weights_spark": GBT_WEIGHTS,
+        "n_train_lastfold": stats["n_train"],
+        "prior": stats["prior"],
+        "edges": stats["edges"],
+        "bmap": stats["power"]["bmap"],
+        "power_ac": {"a": stats["power"]["a"], "c": stats["power"]["c"]},
+        "table_neigh": stats["table8"]["neigh"],
+        "table_alpha_glob": stats["table8"]["alpha_glob"],
+        "te_keys": stats["te_ord"]["key_order"],
+        "spline_n_coef": len(stats["spline"]["coef"]),
+        "days_knots": stats["spline"]["days_knots"],
+        "rk_knots": stats["spline"]["rk_knots"],
+    }
     dump_json("portable_params_compact.json", compact)
-    # full stats for Spark (may be large)
+    # full last-fold stats (includes cond_ref; needed for rank)
     (OUT / "portable_stats_lastfold.json").write_text(json.dumps(stats, ensure_ascii=False, default=str))
     dump_json(
         "portable_score.json",
         {
-            "protocol": "StratifiedKFold, fold-internal fit, identity Ridge, clip[0,1]",
-            "screen_5fold": screen,
-            "best_alpha": best,
-            "report_10fold": {"auc": a10, "per_fold": pf},
+            "protocol": "StratifiedKFold seed=2026, fold-internal fit, identity Ridge + 8-neigh table + ordered-TE maps, rank fuse",
+            "closed_weights": CLOSED_WEIGHTS,
+            "auc5": auc(y, oof5),
+            "auc10": a10,
+            "per_fold": pf,
+            "spark_gbt_stack": {
+                "note": "Not inside score(); implement with Spark GBTRegressor RMSE, 400 trees, no ES",
+                "weights": GBT_WEIGHTS,
+                "honest_10fold_from_exp6": 0.6822016668537568,
+            },
         },
     )
-    print("WROTE portable_score.json 10fold", a10)
+    print("WROTE portable_score.json closed 10fold", a10)
 
 
 if __name__ == "__main__":

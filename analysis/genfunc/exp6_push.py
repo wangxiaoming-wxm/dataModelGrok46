@@ -53,7 +53,7 @@ def collect(df, y, splits, lgb_rounds=400):
 
         rk_tr = per_source_rank(src_tr, cond_tr, src_tr, cond_tr)
         rk_va = per_source_rank(src_va, cond_va, src_tr, cond_tr)
-        km_tr, km_va, dtr, dva, ctr, cva, _, _ = make_keys(trn, val, cond_tr, cond_va, rk_tr, rk_va)
+        km_tr, km_va, dtr, dva, ctr, cva, _, _, _ = make_keys(trn, val, cond_tr, cond_va, rk_tr, rk_va)
 
         _, p_sp, _, _ = fit_spline_car(trn, val, ytr, src_levels, reg_levels, alpha=20.0)
         arms["spline"][va_i] = p_sp
