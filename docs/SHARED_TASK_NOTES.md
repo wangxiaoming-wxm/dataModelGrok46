@@ -1,6 +1,6 @@
 # 共享任务笔记（主会话与子 agent 必读）
 
-更新时间: 2026-08-13（最强可提交：gauss(0.80 opus + 0.15 LGB + 0.05 VAL-ES) + 四窗硬门，gated OOF **0.70456**；见 `analysis/FINAL_BEST.md`）
+更新时间: 2026-08-13（最强可提交：honest10 10折×8seed max2 + 四窗硬门，ungated **0.70258** / gated **0.70493**，已过 W62 0.70159；见 `analysis/FINAL_BEST.md`）
 
 ## 目标
 
@@ -9,7 +9,7 @@ AUC 冲击前三：第3名 **0.72384**，第2 **0.72515**，第1 **0.74952**。
 
 ## 已证实（不要再走弯路）
 
-1. **RMSE 回归 0/1**，禁止 Logloss/CrossEntropy（会掉到 AUC≈0.51）。
+1. **Regressor + Logloss 会崩到 AUC≈0.51**。Classifier + Logloss + 固定树数有效（honest10 / opus5）。RMSE 回归 0/1 仍可用，但已被 Classifier 超过。
 2. 双世界：`cond_r=condition/median(condition|source)` + `ratio=days/cond_r`；`rate=days*(1-rank(condition|source))`。
 3. **禁止 id 及字节 TE**（vz19 线上负迁移）。禁止伪标签。
 4. **高基数 TE 不能作为 GBT/LGB 的数值特征**：LOO-TE 喂 LGB 会 best_iter=1、AUC≈0.50。TE 只能当**独立分数**做 rank 融合。

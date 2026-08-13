@@ -76,6 +76,17 @@ def nested_auc(oof: np.ndarray, y: np.ndarray, n_blocks: int = 5) -> float:
     return auc(y, out)
 
 
+def load_honest10() -> tuple[np.ndarray, np.ndarray] | None:
+    """8-seed 10-fold HONEST max2 written by train_honest10.py."""
+    p = OPUS / "honest10_max2.npz"
+    if not p.is_file():
+        return None
+    z = np.load(p)
+    if "oof" not in z.files or "test_pred" not in z.files:
+        return None
+    return rank01(np.asarray(z["oof"], dtype=np.float64)), rank01(np.asarray(z["test_pred"], dtype=np.float64))
+
+
 def load_opus5() -> tuple[np.ndarray, np.ndarray, dict] | None:
     mo_p, ca_p = OPUS / "merger_ord8.npz", OPUS / "v2_cat_alt8.npz"
     if not (mo_p.is_file() and ca_p.is_file()):
@@ -160,9 +171,16 @@ def main() -> None:
     if opus is not None:
         opus_oof, opus_te, opus_meta = opus
 
+    h10 = load_honest10()
+    h10_oof = h10_te = None
+    if h10 is not None:
+        h10_oof, h10_te = h10
+
     cands: list[tuple[str, np.ndarray, np.ndarray]] = [
         (f"teacher_{tea_tag}", tea_s, tea_t),
     ]
+    if h10_oof is not None:
+        cands.append(("honest10_max2", h10_oof, h10_te))
     if lgb_oof is not None:
         cands += [
             ("lgb", lgb_oof, lgb_te),
@@ -242,7 +260,7 @@ def main() -> None:
     out.to_csv(SUB / "submission.csv", index=False)
 
     report = {
-        "recipe": "opus5 HONEST 8-seed max2 (Classifier Logloss, no ES) + frozen 4-window gate",
+        "recipe": "honest10 10-fold 8-seed max2 (Classifier Logloss, no ES) + frozen 4-window gate",
         "selected": best_name,
         "auc_gated": best_g,
         "auc_nested": best_n,
@@ -256,7 +274,7 @@ def main() -> None:
         "vales_seeds": seeds,
         "n_test": int(len(out)),
         "gate": "floor[1725,1825)+[2110,2210) -0.10[700,880) +0.05[9370,9475)",
-        "honest_note": "opus5 is HONEST_NO_ES 5fold x 8seed; VAL-ES mixes are slightly optimistic; no cross-protocol elementwise max",
+        "honest_note": "honest10 is HONEST_NO_ES 10fold x 8seed; opus5 is 5fold; VAL-ES mixes are slightly optimistic; no cross-protocol elementwise max",
         "status": "assembled",
     }
     (SUB / "final_best_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")

@@ -1,7 +1,7 @@
 {
-  "auc_blend": 0.7045578940496576,
-  "auc_gated": 0.7045578940496576,
-  "auc_cb_main": 0.6952411532236429,
-  "auc_cb_w62": 0.7045578940496576,
-  "selected": "gauss_0.80opus+0.15lgb+0.05vales"
+  "auc_blend": 0.7049320245780719,
+  "auc_gated": 0.7049320245780719,
+  "auc_cb_main": 0.6978447165743557,
+  "auc_cb_w62": 0.7049320245780719,
+  "selected": "honest10_max2_8seed"
 }

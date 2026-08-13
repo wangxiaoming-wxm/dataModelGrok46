@@ -1,23 +1,34 @@
 {
-  "recipe": "opus5 HONEST 8-seed max2 (Classifier Logloss, no ES) + frozen 4-window gate",
-  "selected": "gauss_0.80opus+0.15lgb+0.05vales",
-  "auc_gated": 0.7045578940496576,
-  "auc_nested": 0.7019299741497151,
-  "opus_merger_auc": 0.6965958152313668,
-  "opus_alt_auc": 0.6970387610970329,
-  "teacher_tag": "max2",
-  "teacher_ungated": 0.6920742047275689,
-  "lgb_ungated": 0.6793506320064263,
-  "cb_tag": "max2",
-  "cb_ungated": 0.6952411532236429,
-  "vales_seeds": [
-    2026,
-    2036,
-    2046,
-    2056
+  "recipe": "honest10 max2 8-seed 10-fold Classifier Logloss no-ES + frozen 4-window gate",
+  "selected": "honest10_max2_8seed",
+  "auc_ungated": 0.702579067479036,
+  "auc_nested": 0.7023123893879286,
+  "auc_gated": 0.7049320245780719,
+  "n_seed": 8,
+  "main_pool": 0.6978447165743557,
+  "alt_pool": 0.6987470533302444,
+  "main_per_seed": [
+    0.691485,
+    0.691619,
+    0.693896,
+    0.689913,
+    0.692309,
+    0.693274,
+    0.694686,
+    0.692161
+  ],
+  "alt_per_seed": [
+    0.690431,
+    0.690467,
+    0.695723,
+    0.692606,
+    0.693532,
+    0.691172,
+    0.694663,
+    0.692913
   ],
   "n_test": 6398,
   "gate": "floor[1725,1825)+[2110,2210) -0.10[700,880) +0.05[9370,9475)",
-  "honest_note": "opus5 is HONEST_NO_ES 5fold x 8seed; VAL-ES mixes are slightly optimistic; no cross-protocol elementwise max",
-  "status": "assembled"
+  "honest_note": "HONEST_NO_ES 10fold x Nseed; not mixed with LGB/VAL-ES; no cross-protocol max",
+  "status": "submitted"
 }
