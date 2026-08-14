@@ -1,18 +1,9 @@
 #!/usr/bin/env python3
 """Strengthen the 0.71629 recipe: W62⊕ref30 → gauss(0.70·honest10 + 0.30·ref) + frozen gate.
 
-The uploaded best_0.716 zip is the online 0.71629 submission:
-  (1-0.30)·rank(W62) + 0.30·rank(ref)
-W62 is the frozen 0.71503 dual-arm RMSE checkpoint. ref is the extra-split
-CatBoost mapped onto local rows (cover 0.976, unmatched fallback cat_opt5).
-
-honest10 (Classifier 10-fold×8seed max2, ungated 0.70258) is locally stronger
-than W62 (0.70153) and has the same Spearman vs ref (~0.90). Weights 0.70/0.30
-are taken from the 0.716 recipe, not re-searched. Gauss copula and the four
-window insurer gate are frozen from prior honest10 work.
-
-Paired bootstrap vs current honest10+gate (2000 stratified):
-  gated Δ=+0.00244, CI [+0.00008, +0.00470], p_pos=0.979.
+Reads analysis/opus5/artifacts/honest10_max2.npz (bag0+bag1 pool once 2bag is in).
+Weights 0.70/0.30 are taken from the 0.716 recipe, not re-searched.
+Prefer analysis/opus5/eval_bag_pool.py --write after bag1 completes.
 """
 from __future__ import annotations
 

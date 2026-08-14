@@ -1,0 +1,47 @@
+{
+  "bag0_complete": true,
+  "bag1_complete": true,
+  "locked_gated": 0.7074169896957119,
+  "locked_nested": 0.7048286274191353,
+  "packs": {
+    "bag0": {
+      "name": "bag0",
+      "h10_ungated": 0.702579067479036,
+      "h10_nested": 0.7023123893879286,
+      "blend_ungated": 0.7051219509282457,
+      "blend_nested": 0.7048286274191353,
+      "blend_gated": 0.7074169896957119,
+      "n_main": 8,
+      "n_alt": 8
+    },
+    "bag1": {
+      "name": "bag1",
+      "h10_ungated": 0.7025914572252223,
+      "h10_nested": 0.7022121767420679,
+      "blend_ungated": 0.7051709376957978,
+      "blend_nested": 0.7048602237598114,
+      "blend_gated": 0.7075838283260846,
+      "n_main": 8,
+      "n_alt": 8
+    },
+    "bag0+bag1": {
+      "name": "bag0+bag1",
+      "h10_ungated": 0.7029545912319209,
+      "h10_nested": 0.7026760707328121,
+      "blend_ungated": 0.705383727854697,
+      "blend_nested": 0.7050774175031984,
+      "blend_gated": 0.7077368591067918,
+      "n_main": 16,
+      "n_alt": 16
+    }
+  },
+  "bootstrap_gated_bag01_vs_bag0": {
+    "mean": 0.00031706792277794523,
+    "ci_lo": -0.0002688438087890321,
+    "ci_hi": 0.0008765415779977218,
+    "p_pos": 0.865
+  },
+  "should_write": true,
+  "reason": "gated 0.70774 (+0.00032 vs lock) nested 0.70508 (+0.00025 vs lock); bootstrap CI includes 0 (p_pos=0.865)",
+  "recipe": "gauss(0.70\u00b7honest10_pool + 0.30\u00b7ref) + frozen 4-window gate"
+}

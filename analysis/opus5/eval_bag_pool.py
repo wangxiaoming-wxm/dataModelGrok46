@@ -129,6 +129,8 @@ def score_pack(name: str, h_oof: np.ndarray, h_te: np.ndarray, y: np.ndarray, re
         "blend_gated": float(roc_auc_score(y, gated_oof)),
         "oof": oof,
         "tes": tes,
+        "h_oof": h_oof,
+        "h_te": h_te,
         "gated_oof": gated_oof,
         "gated_te": gated_te,
     }
@@ -256,7 +258,8 @@ def main() -> int:
     print(f"wrote {ART / 'bag_pool_report.json'}", flush=True)
 
     if cand is not None and b1_ok:
-        np.savez(ART / "honest10_max2_bag01.npz", oof=cand["oof"], test_pred=cand["tes"], y=y)
+        np.savez(ART / "honest10_max2_bag01.npz", oof=cand["h_oof"], test_pred=cand["h_te"], y=y)
+        np.savez(ART / "honest10_max2.npz", oof=cand["h_oof"], test_pred=cand["h_te"], y=y)
 
     if not args.write:
         print("dry-run: pass --write to update submission.csv", flush=True)
@@ -280,8 +283,64 @@ def main() -> int:
     out = order.merge(pd.DataFrame({"id": test["id"], "label": cand["gated_te"]}), on="id", how="left")
     out["label"] = out["label"].fillna(0.5)
     assert len(out) == 6398
+    assert list(out["id"]) == list(test["id"])
     out.to_csv(SUB / "submission.csv", index=False)
     out.to_csv(SUB / "submission_h10_bag01_ref30_gauss.csv", index=False)
+
+    payload_sub = {
+        "recipe": "gauss(0.70·honest10 bag0+bag1 + 0.30·ref) + frozen 4-window gate",
+        "selected": "gauss_0.70h10_bag01+0.30ref+gate",
+        "base_online": "best_0.716 W62⊕ref30 = 0.71629; swap W62→honest10 2bag, keep w_ref=0.30, add gauss+gate",
+        "auc_ungated": cand["blend_ungated"],
+        "auc_nested": cand["blend_nested"],
+        "auc_gated": cand["blend_gated"],
+        "auc_h10": cand["h10_ungated"],
+        "auc_h10_nested": cand["h10_nested"],
+        "auc_h10_bag0": packs["bag0"]["h10_ungated"] if "bag0" in packs else None,
+        "w_ref": W_REF,
+        "n_test": int(len(out)),
+        "gate": "floor[1725,1825)+[2110,2210) -0.10[700,880) +0.05[9370,9475)",
+        "honest_note": "honest10 is HONEST 10fold×8seed×2bag Classifier; ref is gray extra-split; weights frozen from 0.716",
+        "bootstrap_vs_bag0_gate": None if boot is None else (
+            f"Δ={boot['mean']:+.5f} CI[{boot['ci_lo']:+.5f},{boot['ci_hi']:+.5f}] p_pos={boot['p_pos']:.3f}"
+        ),
+        "status": "submitted",
+    }
+    (SUB / "final_best_report.json").write_text(json.dumps(payload_sub, indent=2), encoding="utf-8")
+    (SUB / "final_best_metrics.json").write_text(
+        json.dumps(
+            {
+                "auc_blend": cand["blend_gated"],
+                "auc_gated": cand["blend_gated"],
+                "auc_cb_main": cand["h10_ungated"],
+                "auc_cb_w62": cand["blend_gated"],
+                "selected": payload_sub["selected"],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (SUB / "oof_report.txt").write_text(
+        "\n".join(f"{k}={v}" for k, v in payload_sub.items() if not isinstance(v, (list, dict))) + "\n",
+        encoding="utf-8",
+    )
+    pd.DataFrame(
+        {
+            "id": train["id"],
+            "label": y,
+            "pred_cb_main": cand["oof"],
+            "pred_cb_alt": rank01(ref_oof),
+            "pred_fuse": cand["oof"],
+        }
+    ).to_parquet(SUB / "final_best_oof.parquet", index=False)
+    pd.DataFrame(
+        {
+            "id": test["id"],
+            "pred_cb_main": cand["tes"],
+            "pred_cb_alt": rank01(ref_te),
+            "pred_fuse": cand["tes"],
+        }
+    ).to_parquet(SUB / "final_best_test.parquet", index=False)
     print(f"wrote {SUB / 'submission.csv'} gated={cand['blend_gated']:.6f} nested={cand['blend_nested']:.6f}", flush=True)
     return 0
 
