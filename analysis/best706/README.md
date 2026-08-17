@@ -5,7 +5,7 @@
 - 权重：cat_opt5(7seed) 0.33 + ref(2026+8888 等权) 0.42 + et 0.07 + b_v3 0.04
         + xgb 0.04 + xgb_d202 0.04 + xgb_d606 0.02 + xgb_d707 0.03
 - cat_opt5 seeds: 314162, 141422, 24680, 223607, 259810, 3141603, 271831
-- ref 组件：参考 train_old(21328 全精度, 无 id) CatBoost 5 折，seed 2026 与 8888 等权，
+- ref 组件：参考 train1(21328 全精度, 无 id) CatBoost 5 折，seed 2026 与 8888 等权，
   经特征映射迁移到本地（train cover 0.976 / test cover 1.0）
 - OOF AUC = 0.69427；线上 0.70599（2026-08-13）
 

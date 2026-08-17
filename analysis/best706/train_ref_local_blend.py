@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """参考老数据模型 + 本地模型均值融合（均无 id 特征）。
 
-思路：参考数据（train_old 21328 全精度 + test 10000）训练 CatBoost（与本地同协议），
+思路：参考数据（train1 21328 全精度 + test1 10000）训练 CatBoost（与本地同协议），
 预测参考 test，经特征级映射迁移到本地 test（cover 1.0）。该模型与本地数据模型
 天然低相关（不同数据域训练）。最后与本地 cat_opt5 集成预测做均值，评估增益。
 
@@ -118,8 +118,8 @@ def map_rows(local, ref):
 def main():
     t0 = time.time()
     # ---- 参考数据特征 ----
-    ref_tr = pd.read_csv(REF / "train_old.csv")
-    ref_te = pd.read_csv(REF / "test.csv")
+    ref_tr = pd.read_csv(REF / "train1.csv")
+    ref_te = pd.read_csv(REF / "test1.csv")
     ref_y = ref_tr.label.to_numpy()
     fe_t0 = time.time()
     print("[fe] 参考数据特征构建...", flush=True)
