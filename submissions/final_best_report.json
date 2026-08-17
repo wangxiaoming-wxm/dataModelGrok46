@@ -1,0 +1,17 @@
+{
+  "recipe": "gauss(0.70\u00b7honest10 bag0+bag1 + 0.30\u00b7ref) + frozen 4-window gate",
+  "selected": "gauss_0.70h10_bag01+0.30ref+gate",
+  "base_online": "best_0.716 W62\u2295ref30 = 0.71629; swap W62\u2192honest10 2bag, keep w_ref=0.30, add gauss+gate",
+  "auc_ungated": 0.705383727854697,
+  "auc_nested": 0.7050774175031984,
+  "auc_gated": 0.7077368591067918,
+  "auc_h10": 0.7029545912319209,
+  "auc_h10_nested": 0.7026760707328121,
+  "auc_h10_bag0": 0.702579067479036,
+  "w_ref": 0.3,
+  "n_test": 6398,
+  "gate": "floor[1725,1825)+[2110,2210) -0.10[700,880) +0.05[9370,9475)",
+  "honest_note": "honest10 is HONEST 10fold\u00d78seed\u00d72bag Classifier; ref is gray extra-split; weights frozen from 0.716",
+  "bootstrap_vs_bag0_gate": "\u0394=+0.00032 CI[-0.00027,+0.00088] p_pos=0.865",
+  "status": "submitted"
+}

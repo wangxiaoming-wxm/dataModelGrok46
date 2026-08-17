@@ -1,0 +1,33 @@
+{
+  "protocol": "v11: cat_opt5(0.37)+ref(0.38)+et(0.05)+bv3(0.05)+xgb(0.05)+diverse(0.09) gauss",
+  "v10_auc": 0.6932107275895864,
+  "v11_auc": 0.6939128629648295,
+  "delta": 0.000702135375243107,
+  "bootstrap": {
+    "auc_a": 0.6932107275895864,
+    "auc_b": 0.6939128629648295,
+    "full_delta": 0.000702135375243107,
+    "boot_mean": 0.0007059135512177183,
+    "ci95": [
+      -0.0005544125309794367,
+      0.0019894362237566575
+    ],
+    "p_pos": 0.8636666666666667,
+    "verdict": "ambiguous",
+    "n_boot": 3000
+  },
+  "weights": {
+    "cat_opt5": 0.37,
+    "ref": 0.38,
+    "et": 0.05,
+    "b_v3": 0.05,
+    "xgb": 0.05,
+    "d202": 0.04,
+    "d606": 0.02,
+    "d707": 0.03
+  },
+  "risk_note": "用户接受更高风险（bootstrap p_pos<95% 也采纳）",
+  "submission": "submission.csv",
+  "backup": "submission_backup_sprint4_v10.csv",
+  "seconds": 226.6
+}

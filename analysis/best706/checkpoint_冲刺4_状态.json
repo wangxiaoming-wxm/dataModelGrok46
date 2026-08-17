@@ -1,0 +1,62 @@
+{
+  "checkpoint_time": "2026-08-13",
+  "mission": "冲刺4：线上 0.70005 → 0.72 第一",
+  "status": "v11 线上 0.70553 确认（ref 0.38 高风险权重有效，线上放大5倍）",
+  "current_submission": {
+    "protocol": "v11: cat_opt5(0.37)+ref(0.38)+et(0.05)+b_v3(0.05)+xgb(0.05)+diverse(0.09) gauss",
+    "oof_auc": 0.69391,
+    "public_score": 0.70553,
+    "file": "submission.csv",
+    "backup": "submission_backup_sprint4_v10.csv",
+    "note": "ref权重0.20→0.38: OOF +0.0007 → 线上 +0.00355（放大5x）"
+  },
+  "cat_opt5_seeds": [
+    "314162",
+    "141422",
+    "24680",
+    "223607",
+    "259810",
+    "3141603",
+    "271831"
+  ],
+  "pseudo_label_lesson": {
+    "biased_eval": "共识伪标签 OOF +0.0246（误以为巨大信号）",
+    "unbiased_eval": "fold-exclusive 无偏验证 -0.0009（零真实增益）",
+    "conclusion": "伪标签是泄漏伪影！伪标签源模型看到全train，使OOF被高估。真实无增益。已回退并清理。",
+    "methodological_takeaway": "任何利用test预测的伪标签/半监督，必须用fold-exclusive源模型做无偏验证，否则+0.02的假增益会误导"
+  },
+  "key_gains_final": {
+    "seed_curation": "+0.0046（最大真实杠杆）",
+    "diverse_xgb": "+0.0007",
+    "cat_b_v3": "+0.0007",
+    "total_vs_old_0.68591": "+0.0049（诚实）"
+  },
+  "closed_paths": [
+    "MLP",
+    "NN",
+    "stacking",
+    "xgb_ms",
+    "cat_depth8",
+    "lgb2",
+    "RF",
+    "cat_raw",
+    "特征交互",
+    "额外seed(池收敛)",
+    "伪标签(泄漏,无偏-0.0009)"
+  ],
+  "conclusion": "模型到实际极限 0.69086 OOF（→~0.7058线上）。目标0.72需新信号源。forecaster建议的伪标签经无偏验证为泄漏伪影，非真实信号。",
+  "ref_transfer_lesson": {
+    "mechanism": "本地test≈参考test子集(cover1.0)；参考train 21328全精度训练模型(无id)经特征映射迁移到本地test",
+    "train_matched_auc": 0.68692,
+    "spearman_vs_cat_opt5": 0.9251,
+    "verdict": "真实+0.00142"
+  },
+  "new_findings": {
+    "x19_anchor": "x19是16个离散锚点，V=sqrt(x19)+噪声(±0.003)——数据生成机制，但无建模增益",
+    "holdout_357": "本地train 357行溢出匹配参考test（可恢复label），是参考test分布唯一有label样本，n太小不可靠",
+    "xgb_lesson": "低相关(rho0.48)来自lr0.05弱正则enable_categorical；强正则反而rho0.91",
+    "candidate_family": "candidate族19列在209列重建中,但190列协议(无candidate)与209列无稳健差异",
+    "confirm_baseline_correct": "所有新特征confirm必须在190列ag_train_feats基线上做（此前209基线混淆了两轮实验结论）"
+  },
+  "key_insight": "ref组件权重被严重低估：OOF上ref从0.10→0.38只+0.0017，但线上放大5倍。ref(参考数据迁移)是最强线上杠杆。下一步：ref权重继续上探0.40-0.45+ref模型增强(更多seed/更强协议)"
+}

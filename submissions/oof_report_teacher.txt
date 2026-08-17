@@ -1,0 +1,10 @@
+sparkml_teacher_blend
+teacher=cb_teacher
+n_test=6398
+auc_w62=0.691069
+auc_max2=0.692074
+auc_insurer_gate=0.694312
+selected=cb_max2+insurer_gate
+auc_blend=0.694312
+gate=zero[1725,1825)+[2110,2210) rank-0.10[700,880) rank+0.05[9370,9475); submit=rank01(gated)
+note=Spark ML Scala pipeline consumes teacher via CatBoostArm.joinTeacher / BlendApp
